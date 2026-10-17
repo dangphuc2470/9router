@@ -92,6 +92,15 @@ const MODEL_SYNONYMS = {
     "claude-sonnet-4.6": "claude-sonnet-4-6",
     "claude-opus-4.6": "claude-opus-4-6-thinking",
     "claude-opus-4.6-thinking": "claude-opus-4-6-thinking",
+    "gemini-4-argon": "gemini-4-argon-medium",
+    "gemini-4-argon-high": "gemini-4-argon-high",
+    "gemini-4-argon-medium": "gemini-4-argon-medium",
+    "gemini-4-argon-low": "gemini-4-argon-low",
+    "gemini-4-argon-tiered": "gemini-4-argon-medium",
+    "gemini-argon": "gemini-4-argon-medium",
+    "gemini-argon-high": "gemini-4-argon-high",
+    "gemini-argon-medium": "gemini-4-argon-medium",
+    "gemini-argon-low": "gemini-4-argon-low",
   },
 };
 
@@ -99,6 +108,10 @@ const MODEL_SYNONYMS = {
 // Order matters: more specific patterns first. Catches AG renamed variants (e.g. gemini-pro-agent)
 const MODEL_PATTERNS = {
   antigravity: [
+    { match: /argon.*low|low.*argon/i,                             alias: "gemini-4-argon-low" },
+    { match: /argon.*medium|medium.*argon/i,                       alias: "gemini-4-argon-medium" },
+    { match: /argon.*high|high.*argon/i,                           alias: "gemini-4-argon-high" },
+    { match: /argon/i,                                             alias: "gemini-4-argon-medium" },
     { match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i, alias: "gemini-3.8-flash-low" },
     { match: /flash.*medium|medium.*flash/i,                       alias: "gemini-3.8-flash-medium" },
     { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3.8-flash-high" },
@@ -182,6 +195,14 @@ function extractModel(url, body) {
         ? String(rawLevel).toLowerCase()
         : "medium";
       return `gemini-${ver}-flash-${level}`;
+    }
+    if (cleanModelName === "gemini-4-argon-tiered" || cleanModelName === "gemini-argon-tiered" || cleanModelName === "gemini-4-argon") {
+      const rawLevel = parsed.request?.generationConfig?.thinkingConfig?.thinkingLevel
+        || parsed.generationConfig?.thinkingConfig?.thinkingLevel;
+      const level = ["high", "medium", "low"].includes(String(rawLevel).toLowerCase())
+        ? String(rawLevel).toLowerCase()
+        : (cleanModelName === "gemini-4-argon" ? null : "medium");
+      if (level) return `gemini-4-argon-${level}`;
     }
     return model;
   } catch {
