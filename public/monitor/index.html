@@ -566,12 +566,88 @@
       color: var(--text-tertiary);
     }
 
-    .acc-active-tag {
+    .acc-active-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      position: relative;
+      padding: 2px 7px 2px 6px;
+      border-radius: 999px;
       font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.04em;
       color: var(--apple-teal);
+      background: rgba(100, 210, 255, 0.12);
+      border: 1px solid rgba(100, 210, 255, 0.28);
+      overflow: hidden;
+      user-select: none;
+      animation: active-pop-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+
+    .acc-active-pill .pill-track {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 2px;
+      background: var(--apple-teal);
+      opacity: 0.85;
+      border-radius: 999px;
+      transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .acc-active-pill .pill-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: var(--apple-teal);
+      animation: pulse 1.8s infinite;
+    }
+
+    .acc-active-pill .pill-count {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 9px;
+      color: var(--text-primary);
+      opacity: 0.95;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .light-theme .acc-active-pill .pill-count {
+      background: rgba(0, 0, 0, 0.07);
+    }
+
+    @keyframes active-pop-in {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes card-call-flash {
+      0% { background-color: rgba(100, 210, 255, 0.24); transform: scale(1.008); }
+      50% { background-color: rgba(100, 210, 255, 0.12); }
+      100% { transform: scale(1); }
+    }
+
+    .quota-card.just-called {
+      animation: card-call-flash 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .quota-card.active {
+      background-color: var(--card-active-bg);
+      border-color: var(--card-active-border);
+      box-shadow: var(--card-active-shadow);
+      transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .quota-card.active .status-dot {
+      border-color: var(--card-active-bg);
+      animation: dot-breathe 2s infinite ease-in-out;
+    }
+
+    @keyframes dot-breathe {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.28); opacity: 0.75; }
     }
 
     /* Metric Column (5H & Weekly) */
@@ -1540,9 +1616,11 @@
         const redW = getRedPctWeekly(acc.id, gw);
 
         const isActive = acc.isActive;
+        const turnCount = Math.min(configuredStickyLimit, Math.max(1, acc.consecutiveUseCount || 1));
+        const turnPct = configuredStickyLimit > 0 ? Math.min(100, Math.round((turnCount / configuredStickyLimit) * 100)) : 100;
 
         html += `
-          <div class="quota-card ${isActive ? 'active' : ''}">
+          <div class="quota-card ${isActive ? 'active' : ''}" data-acc-id="${acc.id}" data-acc-email="${acc.email || ''}">
             <!-- Col 1: Avatar + Name -->
             <div class="acc-profile">
               <div class="avatar-wrap">
@@ -1555,7 +1633,14 @@
                 <div class="acc-name" title="${rawName}">${rawName}</div>
                 <div class="acc-tier-row">
                   <span class="acc-tier">Antigravity</span>
-                  ${isActive ? '<span class="acc-active-tag">• ACTIVE</span>' : ''}
+                  ${isActive ? `
+                    <div class="acc-active-pill" title="Turn in rotation: ${turnCount}/${configuredStickyLimit}">
+                      <span class="pill-dot"></span>
+                      <span>ACTIVE</span>
+                      ${configuredStickyLimit > 1 ? `<span class="pill-count">${turnCount}/${configuredStickyLimit}</span>` : ''}
+                      ${configuredStickyLimit > 1 ? `<div class="pill-track" style="width: ${turnPct}%;"></div>` : ''}
+                    </div>
+                  ` : ''}
                 </div>
               </div>
             </div>
@@ -1840,6 +1925,47 @@
     }
     connectUsageSSE();
 
+    // ================= Configured Sticky Limit & Settings =================
+    let configuredStickyLimit = 3;
+    async function fetchMonitorSettings() {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const s = await res.json();
+          const pOverride = (s.providerStrategies || {})["antigravity"] || {};
+          configuredStickyLimit = pOverride.stickyRoundRobinLimit || s.stickyRoundRobinLimit || 3;
+        }
+      } catch (_) {}
+    }
+    fetchMonitorSettings();
+
+    // Trigger visual pulse when an account receives a request
+    function triggerAccountFlash(emailOrId) {
+      if (!emailOrId) return;
+      const cleanTarget = emailOrId.toLowerCase().trim();
+      const cardEls = document.querySelectorAll(".quota-card");
+      cardEls.forEach(card => {
+        const cId = (card.getAttribute("data-acc-id") || "").toLowerCase();
+        const cEmail = (card.getAttribute("data-acc-email") || "").toLowerCase();
+        if (cId === cleanTarget || cEmail.includes(cleanTarget) || cleanTarget.includes(cEmail.split("@")[0])) {
+          card.classList.remove("just-called");
+          void card.offsetWidth; // force reflow for CSS animation restart
+          card.classList.add("just-called");
+          setTimeout(() => {
+            card.classList.remove("just-called");
+          }, 700);
+        }
+      });
+    }
+
+    function triggerAccountFlashFromLine(line) {
+      if (!line || typeof line !== "string") return;
+      const accMatch = line.match(/ACC:([^\s·\n]+)/);
+      if (accMatch && accMatch[1] && accMatch[1] !== "-") {
+        triggerAccountFlash(accMatch[1]);
+      }
+    }
+
     // ================= MITM Status & Controls =================
     async function fetchMitmStatus() {
       const chip = document.getElementById("mitmStatusChip");
@@ -2035,9 +2161,13 @@
           } else if (msg.type === "line") {
             logs.push(msg.line);
             if (logs.length > 300) logs.shift();
+            triggerAccountFlashFromLine(msg.line);
             renderLogs();
           } else if (msg.type === "lines") {
             logs = logs.concat(msg.lines).slice(-300);
+            if (msg.lines && msg.lines.length) {
+              triggerAccountFlashFromLine(msg.lines[msg.lines.length - 1]);
+            }
             renderLogs();
           } else if (msg.type === "clear") {
             logs = [];
