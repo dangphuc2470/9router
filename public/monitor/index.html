@@ -387,13 +387,20 @@
     }
 
     /* Expand / Full Quotas View */
-    .panel-col.quotas-expanded .usage-section {
-      display: none !important;
+    .panel-col.quotas-expanded {
+      overflow-y: auto;
     }
 
     .panel-col.quotas-expanded .cards-list {
-      flex: 1 1 100%;
-      height: 100%;
+      flex: 0 0 auto;
+      height: auto;
+      max-height: none;
+      overflow-y: visible;
+    }
+
+    .panel-col.quotas-expanded .usage-section {
+      margin-top: 16px;
+      margin-bottom: 8px;
     }
 
     /* Quota Cards Container */
@@ -1263,7 +1270,7 @@
             <span class="material-symbols-outlined" id="viewModeIcon" style="font-size: 16px;">grid_view</span>
           </button>
           <!-- Expand / Collapse Quotas Toggle -->
-          <button class="panel-icon-btn" id="expandToggleBtn" title="Expand Quotas (Full Height)">
+          <button class="panel-icon-btn" id="expandToggleBtn" title="Expand All Accounts">
             <span class="material-symbols-outlined" id="expandIcon" style="font-size: 16px;">open_in_full</span>
           </button>
         </div>
@@ -1608,7 +1615,7 @@
         expandIcon.textContent = isExpanded ? "close_fullscreen" : "open_in_full";
       }
       if (expandToggleBtn) {
-        expandToggleBtn.title = isExpanded ? "Restore Token Usage View" : "Expand Quotas (Full Height)";
+        expandToggleBtn.title = isExpanded ? "Collapse to Compact View" : "Expand All Accounts";
       }
       try {
         localStorage.setItem(EXPAND_KEY, isExpanded ? "true" : "false");
