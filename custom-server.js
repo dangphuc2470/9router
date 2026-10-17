@@ -119,6 +119,15 @@ http.createServer = (...args) => {
       }
     }
     if (rawUrl.startsWith("/api/monitor/proxy")) {
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+        });
+        res.end();
+        return;
+      }
       const u = new URL(rawUrl, "http://127.0.0.1:20128");
       const targetUrl = u.searchParams.get("url");
       if (!targetUrl) {
