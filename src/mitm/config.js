@@ -138,7 +138,7 @@ const MODEL_PATTERNS = {
 // keystroke. Without this guard the broad `flash` pattern in MODEL_PATTERNS hijacks them onto the
 // flash-agent slot. Verified via MITM dump capture of streamGenerateContent (see AI_JOURNAL).
 const MODEL_NO_MAP = {
-  antigravity: [/^tab[_-]/i],
+  antigravity: [/^tab[_-]/i, /argon/i],
 };
 
 // URL substrings whose request/response should NOT be dumped to file (telemetry, polling, empty)
