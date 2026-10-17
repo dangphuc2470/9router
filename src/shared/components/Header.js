@@ -318,6 +318,15 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
           </div>
         )}
         <HeaderSearch />
+        <Link
+          href="/monitor"
+          target="_blank"
+          title="Open Tablet Monitor (Fullscreen Quota & Console)"
+          className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-border bg-surface/70 hover:bg-surface text-text-muted hover:text-text-main transition-colors text-xs font-medium"
+        >
+          <span className="material-symbols-outlined text-[18px] text-primary">tablet_mac</span>
+          <span className="hidden md:inline">Monitor</span>
+        </Link>
         <button
           onClick={() => setDonateOpen(true)}
           className="hidden sm:flex items-center gap-1.5 px-3 h-8 rounded-lg border border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition-colors text-sm font-medium"

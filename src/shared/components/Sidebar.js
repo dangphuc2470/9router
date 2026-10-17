@@ -24,6 +24,7 @@ const navItems = [
   { href: "/dashboard/combos", label: "Combo & Vision Adapter", icon: "layers" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
+  { href: "/monitor", label: "Tablet Monitor", icon: "tablet_mac", target: "_blank" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
   // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
@@ -163,6 +164,7 @@ export default function Sidebar({ onClose }) {
             <Link
               key={item.href}
               href={item.href}
+              target={item.target}
               onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group",
@@ -179,7 +181,12 @@ export default function Sidebar({ onClose }) {
               >
                 {item.icon}
               </span>
-              <span className="text-[13px] font-medium">{item.label}</span>
+              <span className="text-[13px] font-medium flex-1">{item.label}</span>
+              {item.target === "_blank" && (
+                <span className="material-symbols-outlined text-[14px] text-text-muted/60 group-hover:text-primary transition-colors">
+                  open_in_new
+                </span>
+              )}
             </Link>
           ))}
 

@@ -1,6 +1,7 @@
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
 
@@ -54,6 +55,64 @@ http.createServer = (...args) => {
   const rest = args.filter((a) => typeof a !== "function");
   if (!handler) return origCreate(...args);
   const wrapped = (req, res) => {
+    const rawUrl = req.url || "/";
+    if (rawUrl === "/monitor" || rawUrl === "/monitor/" || rawUrl.startsWith("/monitor?")) {
+      const monitorPaths = [
+        path.join(__dirname, "public", "monitor", "index.html"),
+        path.join(process.cwd(), "public", "monitor", "index.html"),
+        path.join(__dirname, "..", "public", "monitor", "index.html"),
+      ];
+      for (const p of monitorPaths) {
+        if (fs.existsSync(p)) {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          fs.createReadStream(p).pipe(res);
+          return;
+        }
+      }
+    }
+    if (rawUrl === "/monitor-launcher.js" || rawUrl.startsWith("/monitor-launcher.js?")) {
+      const launcherPaths = [
+        path.join(__dirname, "public", "monitor-launcher.js"),
+        path.join(process.cwd(), "public", "monitor-launcher.js"),
+        path.join(__dirname, "..", "public", "monitor-launcher.js"),
+      ];
+      for (const p of launcherPaths) {
+        if (fs.existsSync(p)) {
+          res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+          fs.createReadStream(p).pipe(res);
+          return;
+        }
+      }
+    }
+    if (rawUrl === "/api/monitor/states" || rawUrl.startsWith("/api/monitor/states?")) {
+      const stateFile = path.join(os.homedir(), ".9router", "monitor-quota-states.json");
+      if (req.method === "GET") {
+        if (fs.existsSync(stateFile)) {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          fs.createReadStream(stateFile).pipe(res);
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ accStates: {}, weeklyBaseline: {}, lastActiveId: null }));
+        }
+        return;
+      }
+      if (req.method === "POST" || req.method === "PUT") {
+        let body = "";
+        req.on("data", (chunk) => (body += chunk));
+        req.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            fs.writeFileSync(stateFile, JSON.stringify(parsed, null, 2), "utf8");
+            res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ success: true }));
+          } catch (e) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ error: e && e.message ? e.message : "Invalid JSON" }));
+          }
+        });
+        return;
+      }
+    }
     const socketIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "";
     const xff = req.headers["x-forwarded-for"];
     const xRealIp = req.headers["x-real-ip"];

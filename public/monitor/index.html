@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Quota Monitor & Console Stream - 9Router</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('9r_monitor_theme');
+        if (saved === 'light') {
+          document.documentElement.classList.add('light-theme');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <style>
+    :root {
+      --bg: #0c0d11;
+      --header-bg: rgba(12, 13, 17, 0.95);
+      --card-bg: #16181e;
+      --card-border: #262934;
+      --card-shadow: none;
+      --card-active-bg: #182234;
+      --card-active-border: #2a3a56;
+      --card-active-shadow: 0 4px 24px rgba(10, 132, 255, 0.12);
+      --track-bg: #23252e;
+      --pubg-red: #eb3b35;
+      
+      --text-primary: #ffffff;
+      --text-secondary: #989ba6;
+      --text-tertiary: #707380;
+
+      --console-bg: #111318;
+      --console-topbar: #16181e;
+      --console-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      --console-line-hover: rgba(255, 255, 255, 0.04);
+      --console-tab-bg: rgba(0, 0, 0, 0.4);
+      --console-tab-active-bg: rgba(255, 255, 255, 0.12);
+      --console-tab-active-color: #ffffff;
+      --log-generic: #d1d5db;
+      --btn-hover: rgba(255, 255, 255, 0.08);
+      --badge-count-bg: rgba(255, 255, 255, 0.06);
+      --badge-count-border: rgba(255, 255, 255, 0.1);
+      --badge-9router-bg: #1c1e27;
+      --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+      
+      --apple-green: #30D158;
+      --apple-orange: #FF9F0A;
+      --apple-red: #FF453A;
+      --apple-blue: #0A84FF;
+      --apple-purple: #BF5AF2;
+      --apple-teal: #64D2FF;
+      --apple-pink: #FF375F;
+      --apple-indigo: #5E5CE6;
+    }
+
+    html.light-theme, body.light-theme {
+      --bg: #f5f5f7;
+      --header-bg: rgba(245, 245, 247, 0.95);
+      --card-bg: #ffffff;
+      --card-border: #e2e2e7;
+      --card-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+      --card-active-bg: #f0f6ff;
+      --card-active-border: #99c7ff;
+      --card-active-shadow: 0 4px 16px rgba(0, 113, 227, 0.12);
+      --track-bg: #e5e5ea;
+      --pubg-red: #ff3b30;
+
+      --text-primary: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-tertiary: #86868b;
+
+      --console-bg: #ffffff;
+      --console-topbar: #f9f9fb;
+      --console-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      --console-line-hover: rgba(0, 0, 0, 0.04);
+      --console-tab-bg: rgba(0, 0, 0, 0.06);
+      --console-tab-active-bg: #ffffff;
+      --console-tab-active-color: #1d1d1f;
+      --log-generic: #3a3a3c;
+      --btn-hover: rgba(0, 0, 0, 0.06);
+      --badge-count-bg: rgba(0, 0, 0, 0.06);
+      --badge-count-border: rgba(0, 0, 0, 0.1);
+      --badge-9router-bg: #e8f2ff;
+      --scrollbar-thumb: rgba(0, 0, 0, 0.16);
+
+      --apple-green: #28cd41;
+      --apple-orange: #ff9500;
+      --apple-red: #ff3b30;
+      --apple-blue: #0071e3;
+      --apple-purple: #af52de;
+      --apple-teal: #0071e3;
+      --apple-pink: #ff2d55;
+      --apple-indigo: #5856d6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Top Bar Header */
+    header {
+      height: 56px;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      background-color: var(--header-bg);
+      backdrop-filter: blur(20px);
+      z-index: 20;
+      flex-shrink: 0;
+    }
+
+    .brand-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .apple-logo {
+      width: 17px;
+      height: 17px;
+      fill: var(--text-primary);
+      flex-shrink: 0;
+      opacity: 0.92;
+      transform: translateY(-0.5px);
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .title-text {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .badge-9router {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background-color: var(--badge-9router-bg);
+      border: 1px solid var(--card-border);
+      color: var(--apple-teal);
+    }
+
+    .live-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(48, 209, 88, 0.12);
+      border: 1px solid rgba(48, 209, 88, 0.25);
+      color: var(--apple-green);
+    }
+
+    .dot-live {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--apple-green);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .time-capsule {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      gap: 6px;
+      text-decoration: none;
+    }
+
+    .action-btn:hover {
+      background-color: var(--btn-hover);
+      color: var(--text-primary);
+    }
+
+    .action-btn:active {
+      transform: scale(0.96);
+    }
+
+    .action-icon-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 50%;
+    }
+
+    /* Main Container (1920x1200 Optimized Grid) */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 58% 42%;
+      gap: 20px;
+      padding: 16px 32px 24px 32px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+        overflow-y: auto;
+      }
+    }
+
+    .panel-col {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px 8px;
+      flex-shrink: 0;
+    }
+
+    .panel-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-count {
+      padding: 1px 7px;
+      border-radius: 999px;
+      background-color: var(--badge-count-bg);
+      border: 1px solid var(--badge-count-border);
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--text-tertiary);
+    }
+
+    .panel-icon-btn {
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      padding: 0;
+    }
+
+    .panel-icon-btn:hover {
+      background-color: var(--btn-hover);
+      color: var(--text-primary);
+      border-color: var(--card-border);
+    }
+
+    .panel-icon-btn.active {
+      color: var(--apple-teal);
+      background: rgba(100, 210, 255, 0.12);
+      border-color: rgba(100, 210, 255, 0.25);
+    }
+
+    /* Expand / Full Quotas View */
+    .panel-col.quotas-expanded .usage-section {
+      display: none !important;
+    }
+
+    .panel-col.quotas-expanded .cards-list {
+      flex: 1 1 100%;
+      height: 100%;
+    }
+
+    /* Quota Cards Container */
+    .cards-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      padding-right: 4px;
+    }
+
+    /* List mode default metric wrapper */
+    .quota-metrics-wrap {
+      display: contents;
+    }
+
+    /* Grid Mode Container */
+    .cards-list.grid-mode {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      align-content: start;
+    }
+
+    @media (max-width: 900px) {
+      .cards-list.grid-mode {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .cards-list.grid-mode .quota-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
+
+    .cards-list.grid-mode .acc-profile {
+      width: 100%;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+
+    .cards-list.grid-mode .quota-metrics-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .cards-list.grid-mode .metric-col {
+      padding: 0;
+    }
+
+    .cards-list.grid-mode .metric-col:last-child {
+      padding-right: 0;
+    }
+
+    .cards-list::-webkit-scrollbar {
+      width: 5px;
+    }
+    .cards-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .cards-list::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      border-radius: 4px;
+    }
+
+    /* Individual Quota Card */
+    .quota-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: minmax(180px, 1.35fr) 1fr 1fr;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      box-sizing: border-box;
+      box-shadow: var(--card-shadow);
+    }
+
+    .quota-card.active {
+      background-color: var(--card-active-bg);
+      border-color: var(--card-active-border);
+      box-shadow: var(--card-active-shadow);
+    }
+
+    .quota-card.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background-color: var(--apple-teal);
+    }
+
+    /* Account Profile */
+    .acc-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .avatar-circle {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-dot {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid var(--card-bg);
+    }
+
+    .quota-card.active .status-dot {
+      border-color: var(--card-active-bg);
+    }
+
+    .acc-details {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .acc-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.01em;
+    }
+
+    .acc-tier-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .acc-tier {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .acc-active-tag {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--apple-teal);
+    }
+
+    /* Metric Column (5H & Weekly) */
+    .metric-col {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 4px;
+      min-width: 0;
+    }
+
+    .metric-col:last-child {
+      padding-right: 14px;
+    }
+
+    .metric-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      gap: 6px;
+    }
+
+    .metric-lbl-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .metric-lbl {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .metric-reset {
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--text-tertiary);
+    }
+
+    .metric-pct {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", monospace;
+      flex-shrink: 0;
+    }
+
+    /* 3-Layer PUBG Progress Bar */
+    .capsule-track {
+      position: relative;
+      width: 100%;
+      height: 7px;
+      background-color: var(--track-bg);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .capsule-red-damage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background-color: var(--pubg-red);
+      border-radius: 999px;
+      transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .capsule-bar-active {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 999px;
+      transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Usage & Token Consumption Section */
+    .usage-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+      flex-shrink: 0;
+    }
+
+    .usage-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 1280px) {
+      .usage-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .usage-stat-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 11px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--card-shadow);
+      min-width: 0;
+    }
+
+    .stat-lbl {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .stat-val {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", monospace;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .usage-breakdown-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .breakdown-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .breakdown-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 135px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .breakdown-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .breakdown-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .breakdown-list::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      border-radius: 4px;
+    }
+
+    .breakdown-row {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .breakdown-row-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      gap: 8px;
+    }
+
+    .breakdown-model-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-family: "SF Mono", Menlo, Monaco, monospace;
+      font-size: 11.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .breakdown-stats {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .breakdown-track {
+      height: 4px;
+      background-color: var(--track-bg);
+      border-radius: 999px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .breakdown-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--apple-blue), var(--apple-teal));
+      transition: width 0.5s ease;
+    }
+
+    /* Right Panel: Apple Xcode Terminal Console */
+    .console-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      background-color: var(--console-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--console-shadow);
+    }
+
+    .console-topbar {
+      height: 38px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: var(--console-topbar);
+      border-bottom: 1px solid var(--card-border);
+      flex-shrink: 0;
+    }
+
+    .console-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .console-title-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    .console-tabs {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--console-tab-bg);
+      padding: 2px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+    }
+
+    .console-tab {
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .console-tab.active {
+      background-color: var(--console-tab-active-bg);
+      color: var(--console-tab-active-color);
+      font-weight: 600;
+    }
+
+    .console-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sse-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .sse-connected {
+      background: rgba(48, 209, 88, 0.1);
+      border: 1px solid rgba(48, 209, 88, 0.25);
+      color: var(--apple-green);
+    }
+
+    .sse-disconnected {
+      background: rgba(255, 69, 58, 0.1);
+      border: 1px solid rgba(255, 69, 58, 0.25);
+      color: var(--apple-red);
+    }
+
+    .console-btn {
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .console-btn:hover {
+      background: var(--btn-hover);
+      color: var(--text-primary);
+    }
+
+    .console-btn.active {
+      color: var(--apple-teal);
+      background: rgba(100, 210, 255, 0.12);
+    }
+
+    .console-body {
+      flex: 1;
+      padding: 12px 14px;
+      overflow-y: auto;
+      font-family: "SF Mono", Menlo, Monaco, "JetBrains Mono", Consolas, monospace;
+      font-size: 11.5px;
+      line-height: 1.65;
+      background-color: var(--console-bg);
+      user-select: text;
+    }
+
+    .console-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .console-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .console-body::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 4px;
+    }
+
+    .log-line {
+      padding: 1px 4px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-line:hover {
+      background: var(--console-line-hover);
+    }
+
+    .log-ts {
+      color: var(--text-tertiary);
+      font-weight: 600;
+      margin-right: 6px;
+      user-select: none;
+    }
+
+    .log-post { color: var(--apple-blue); font-weight: 500; }
+    .log-done { color: var(--apple-green); font-weight: 500; }
+    .log-refresh { color: var(--apple-indigo); }
+    .log-error { color: var(--apple-red); font-weight: 600; }
+    .log-generic { color: var(--log-generic); }
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header>
+    <div class="brand-left">
+      <!-- Apple SVG Logo -->
+      <svg class="apple-logo" viewBox="0 0 24 24">
+        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.87-.9.04-1.99.6-2.63 1.35-.56.65-.96 1.7-.83 2.74.99.08 2.02-.51 2.54-1.22z"/>
+      </svg>
+      <div class="title-group">
+        <span class="title-text">Quota Monitor</span>
+        <span class="badge-9router">9ROUTER</span>
+        <div class="live-chip">
+          <span class="dot-live"></span>
+          <span>LIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Live Clock Capsule -->
+      <div class="time-capsule" id="clockCapsule">
+        <span class="dot-live"></span>
+        <span id="clockText">--:--:--</span>
+      </div>
+
+      <!-- Refresh with countdown -->
+      <button class="action-btn" id="refreshBtn" title="Refresh Quota Data">
+        <span class="material-symbols-outlined" id="refreshIcon">refresh</span>
+        <span id="countdownText" style="font-family: monospace; color: var(--text-tertiary);">20s</span>
+      </button>
+
+      <!-- Theme Toggle (Light / Dark) -->
+      <button class="action-btn action-icon-btn" id="themeToggleBtn" title="Switch Theme (Light / Dark)">
+        <span class="material-symbols-outlined" id="themeIcon">light_mode</span>
+      </button>
+
+      <!-- Fullscreen Toggle -->
+      <button class="action-btn action-icon-btn" id="fullscreenBtn" title="Toggle Fullscreen (Tablet Display)">
+        <span class="material-symbols-outlined" id="fsIcon">fullscreen</span>
+      </button>
+
+      <!-- Return to Dashboard -->
+      <a href="/dashboard" class="action-btn action-icon-btn" title="Return to Dashboard">
+        <span class="material-symbols-outlined">close</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Viewport -->
+  <main>
+    <!-- Left Column: Quota Monitor -->
+    <section class="panel-col" id="leftPanelCol">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Active Provider Quotas</span>
+          <span class="badge-count" id="accountCountBadge">0 Accounts</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="font-size: 11px; color: var(--text-tertiary);" id="activeAccountNotice">
+            Auto-rotated via 9Router
+          </div>
+          <!-- View Mode Toggle (List / Grid) -->
+          <button class="panel-icon-btn" id="viewModeToggleBtn" title="Switch to Grid View">
+            <span class="material-symbols-outlined" id="viewModeIcon" style="font-size: 16px;">grid_view</span>
+          </button>
+          <!-- Expand / Collapse Quotas Toggle -->
+          <button class="panel-icon-btn" id="expandToggleBtn" title="Expand Quotas (Full Height)">
+            <span class="material-symbols-outlined" id="expandIcon" style="font-size: 16px;">open_in_full</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cards-list" id="cardsList">
+        <!-- Rendered dynamically -->
+        <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+          Loading accounts & quotas...
+        </div>
+      </div>
+
+      <!-- Usage & Token Consumption Section -->
+      <div class="usage-section">
+        <div class="panel-header" style="padding-bottom: 2px;">
+          <div class="panel-title">
+            <span class="material-symbols-outlined" style="font-size: 15px; color: var(--apple-teal);">query_stats</span>
+            <span>Today's Token & Usage</span>
+            <span class="badge-count" id="usagePeriodBadge">TODAY</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 8px;">
+            <span id="activeReqsNotice" style="display: none; align-items: center; gap: 4px; color: var(--apple-green); font-weight: 600;">
+              <span class="dot-live" style="width: 5px; height: 5px;"></span>
+              <span id="activeReqsCount">0</span> active
+            </span>
+            <span id="usageLastUpdated">Syncing...</span>
+          </div>
+        </div>
+
+        <!-- 4 Stat Cards in Responsive Grid -->
+        <div class="usage-grid">
+          <div class="usage-stat-card">
+            <div class="stat-lbl">Total Requests</div>
+            <div class="stat-val" id="statRequests">--</div>
+            <div class="stat-sub" id="statCost">Est. Cost: $0.00</div>
+          </div>
+          <div class="usage-stat-card">
+            <div class="stat-lbl">Input Tokens</div>
+            <div class="stat-val" style="color: var(--apple-blue);" id="statInput">--</div>
+            <div class="stat-sub">Prompt input</div>
+          </div>
+          <div class="usage-stat-card">
+            <div class="stat-lbl">Cached Tokens</div>
+            <div class="stat-val" style="color: var(--apple-teal);" id="statCached">--</div>
+            <div class="stat-sub" id="statCacheRate">--% hit rate</div>
+          </div>
+          <div class="usage-stat-card">
+            <div class="stat-lbl">Output Tokens</div>
+            <div class="stat-val" style="color: var(--apple-green);" id="statOutput">--</div>
+            <div class="stat-sub">Completion output</div>
+          </div>
+        </div>
+
+        <!-- Mini Top Models Breakdown Card -->
+        <div class="usage-breakdown-card" id="usageBreakdownCard">
+          <div class="breakdown-header">
+            <span>Model Activity Breakdown</span>
+            <span id="breakdownModelCount" style="color: var(--text-tertiary); font-family: monospace;">0 models</span>
+          </div>
+          <div class="breakdown-list" id="breakdownList">
+            <div style="text-align: center; padding: 16px; color: var(--text-tertiary); font-size: 11px;">
+              Loading token consumption breakdown...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Live Console Log Stream -->
+    <section class="panel-col">
+      <div class="console-panel">
+        <div class="console-topbar">
+          <div class="console-title-group">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--apple-blue);">terminal</span>
+            <span class="console-title-text">Console Stream</span>
+            <span class="badge-count" id="logCountBadge">0</span>
+          </div>
+
+          <div class="console-tabs">
+            <button class="console-tab active" data-filter="all">All</button>
+            <button class="console-tab" data-filter="requests">Requests</button>
+            <button class="console-tab" data-filter="done">Done</button>
+            <button class="console-tab" data-filter="errors">Errors</button>
+          </div>
+
+          <div class="console-controls">
+            <div class="sse-status sse-disconnected" id="sseStatus">
+              <span class="dot-live" style="background-color: currentColor;"></span>
+              <span id="sseStatusText">CONNECTING</span>
+            </div>
+            <button class="console-btn active" id="autoScrollBtn" title="Lock scroll to bottom">
+              <span class="material-symbols-outlined">vertical_align_bottom</span>
+            </button>
+            <button class="console-btn" id="clearLogsBtn" title="Clear console">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="console-body" id="consoleBody">
+          <!-- Logs stream here -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Constants matching Turing Quota Monitor
+    const AVATAR_PALETTE = ["#0A84FF", "#BF5AF2", "#5E5CE6", "#64D2FF", "#FF375F", "#FF9F0A"];
+    const COLOR_APPLE_GREEN = "#30D158";
+    const COLOR_APPLE_ORANGE = "#FF9F0A";
+    const COLOR_APPLE_RED = "#FF453A";
+    const REFRESH_INTERVAL = 20;
+
+    let countdown = REFRESH_INTERVAL;
+    let accounts = [];
+    let logs = [];
+    let activeFilter = "all";
+    let autoScroll = true;
+
+    // PUBG Red Damage State Tracker (Persistent on 9Router Server & Local Cache)
+    const STORAGE_KEY_STATES = "9r_monitor_acc_states";
+    const STORAGE_KEY_WEEKLY = "9r_monitor_weekly_baseline";
+    const STORAGE_KEY_LAST_ID = "9r_monitor_last_active_id";
+
+    const accStates = {};
+    const weeklyBaseline = {};
+    let lastActiveId = null;
+
+    // 1. Fast instant load from local browser cache
+    try {
+      const s = localStorage.getItem(STORAGE_KEY_STATES);
+      if (s) {
+        const parsed = JSON.parse(s);
+        for (const [k, v] of Object.entries(parsed)) {
+          accStates[k] = { ...v, draining: false };
+        }
+      }
+      const w = localStorage.getItem(STORAGE_KEY_WEEKLY);
+      if (w) Object.assign(weeklyBaseline, JSON.parse(w));
+      const l = localStorage.getItem(STORAGE_KEY_LAST_ID);
+      if (l) lastActiveId = l;
+    } catch (_) {}
+
+    // 2. Synchronize with 9Router Server endpoint
+    async function syncWithServer() {
+      try {
+        const res = await fetch("/api/monitor/states");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.accStates) {
+            for (const [k, v] of Object.entries(data.accStates)) {
+              accStates[k] = { ...v, draining: false };
+            }
+          }
+          if (data && data.weeklyBaseline) {
+            Object.assign(weeklyBaseline, data.weeklyBaseline);
+          }
+          if (data && data.lastActiveId) {
+            lastActiveId = data.lastActiveId;
+          }
+          renderCards();
+        }
+      } catch (_) {}
+    }
+
+    let serverSaveTimer = null;
+    function savePersistedStates() {
+      // Immediate local cache write
+      try {
+        localStorage.setItem(STORAGE_KEY_STATES, JSON.stringify(accStates));
+        localStorage.setItem(STORAGE_KEY_WEEKLY, JSON.stringify(weeklyBaseline));
+        if (lastActiveId) localStorage.setItem(STORAGE_KEY_LAST_ID, lastActiveId);
+      } catch (_) {}
+
+      // Debounced push to 9Router server
+      clearTimeout(serverSaveTimer);
+      serverSaveTimer = setTimeout(async () => {
+        try {
+          await fetch("/api/monitor/states", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              accStates,
+              weeklyBaseline,
+              lastActiveId
+            })
+          });
+        } catch (_) {}
+      }, 300);
+    }
+
+    syncWithServer();
+
+    function getStatusColor(pct) {
+      if (pct >= 50) return COLOR_APPLE_GREEN;
+      if (pct >= 20) return COLOR_APPLE_ORANGE;
+      return COLOR_APPLE_RED;
+    }
+
+    function truncateMiddle(text, maxLen = 17) {
+      if (!text || text.length <= maxLen) return text;
+      const sLen = Math.min(2, Math.max(1, Math.floor(text.length / 4)));
+      const prefixLen = maxLen - sLen - 3;
+      if (prefixLen <= 1) return text.slice(0, 2) + "..." + text.slice(-sLen);
+      return text.slice(0, prefixLen) + "..." + text.slice(-sLen);
+    }
+
+    function formatResetTime(resetStr) {
+      if (!resetStr) return "";
+      try {
+        const cleanStr = resetStr.replace("Z", "+00:00");
+        const target = new Date(cleanStr);
+        const now = new Date();
+        const diffMs = target.getTime() - now.getTime();
+        const totalSec = Math.floor(diffMs / 1000);
+        if (totalSec <= 0) return "soon";
+        const days = Math.floor(totalSec / 86400);
+        const hours = Math.floor((totalSec % 86400) / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+      } catch (e) {
+        return "";
+      }
+    }
+
+    // Live Clock
+    function updateClock() {
+      const now = new Date();
+      const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+      const date = now.toLocaleDateString([], { month: "short", day: "numeric" });
+      document.getElementById("clockText").textContent = `${time}  •  ${date}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Fullscreen Toggle
+    const fsBtn = document.getElementById("fullscreenBtn");
+    const fsIcon = document.getElementById("fsIcon");
+    function updateFsIcon() {
+      fsIcon.textContent = document.fullscreenElement ? "fullscreen_exit" : "fullscreen";
+    }
+    fsBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+    document.addEventListener("fullscreenchange", updateFsIcon);
+
+    // Theme Toggle (Light / Dark Mode)
+    const THEME_KEY = "9r_monitor_theme";
+    const themeBtn = document.getElementById("themeToggleBtn");
+    const themeIcon = document.getElementById("themeIcon");
+
+    function applyTheme(theme) {
+      const isLight = (theme === "light");
+      document.body.classList.toggle("light-theme", isLight);
+      document.documentElement.classList.toggle("light-theme", isLight);
+      if (themeIcon) {
+        themeIcon.textContent = isLight ? "dark_mode" : "light_mode";
+      }
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) {
+        metaTheme.setAttribute("content", isLight ? "#f5f5f7" : "#0c0d11");
+      }
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch (_) {}
+    }
+
+    const savedTheme = localStorage.getItem(THEME_KEY) || "dark";
+    applyTheme(savedTheme);
+
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const isCurrentLight = document.body.classList.contains("light-theme");
+        applyTheme(isCurrentLight ? "dark" : "light");
+      });
+    }
+
+    // ================= Expand / Collapse Quotas =================
+    const EXPAND_KEY = "9r_monitor_quotas_expanded";
+    const leftPanelCol = document.getElementById("leftPanelCol");
+    const expandToggleBtn = document.getElementById("expandToggleBtn");
+    const expandIcon = document.getElementById("expandIcon");
+
+    function setQuotasExpanded(isExpanded) {
+      if (!leftPanelCol) return;
+      leftPanelCol.classList.toggle("quotas-expanded", isExpanded);
+      if (expandToggleBtn) expandToggleBtn.classList.toggle("active", isExpanded);
+      if (expandIcon) {
+        expandIcon.textContent = isExpanded ? "close_fullscreen" : "open_in_full";
+      }
+      if (expandToggleBtn) {
+        expandToggleBtn.title = isExpanded ? "Restore Token Usage View" : "Expand Quotas (Full Height)";
+      }
+      try {
+        localStorage.setItem(EXPAND_KEY, isExpanded ? "true" : "false");
+      } catch (_) {}
+    }
+
+    const savedExpanded = localStorage.getItem(EXPAND_KEY) === "true";
+    setQuotasExpanded(savedExpanded);
+
+    if (expandToggleBtn) {
+      expandToggleBtn.addEventListener("click", () => {
+        const currentlyExpanded = leftPanelCol && leftPanelCol.classList.contains("quotas-expanded");
+        setQuotasExpanded(!currentlyExpanded);
+      });
+    }
+
+    // ================= View Mode Toggle (List / Grid) =================
+    const VIEW_MODE_KEY = "9r_monitor_acc_view_mode";
+    const cardsList = document.getElementById("cardsList");
+    const viewModeToggleBtn = document.getElementById("viewModeToggleBtn");
+    const viewModeIcon = document.getElementById("viewModeIcon");
+
+    function setAccViewMode(mode) {
+      const isGrid = (mode === "grid");
+      if (cardsList) cardsList.classList.toggle("grid-mode", isGrid);
+      if (viewModeToggleBtn) viewModeToggleBtn.classList.toggle("active", isGrid);
+      if (viewModeIcon) {
+        viewModeIcon.textContent = isGrid ? "view_list" : "grid_view";
+      }
+      if (viewModeToggleBtn) {
+        viewModeToggleBtn.title = isGrid ? "Switch to List View" : "Switch to 2-Column Grid View";
+      }
+      try {
+        localStorage.setItem(VIEW_MODE_KEY, mode);
+      } catch (_) {}
+    }
+
+    const savedViewMode = localStorage.getItem(VIEW_MODE_KEY) || "list";
+    setAccViewMode(savedViewMode);
+
+    if (viewModeToggleBtn) {
+      viewModeToggleBtn.addEventListener("click", () => {
+        const isCurrentlyGrid = cardsList && cardsList.classList.contains("grid-mode");
+        setAccViewMode(isCurrentlyGrid ? "list" : "grid");
+      });
+    }
+
+    // Update PUBG Drain States
+    function updateAccStates(newAccounts) {
+      let currentActiveId = null;
+      for (const a of newAccounts) {
+        if (a.isActive) {
+          currentActiveId = a.id;
+          break;
+        }
+      }
+
+      if (currentActiveId !== lastActiveId && lastActiveId !== null) {
+        // Old active account starts 2s drain
+        if (accStates[lastActiveId]) {
+          const oldSt = accStates[lastActiveId];
+          const currVal = oldSt.current_5h ?? oldSt.turn_start_5h ?? 100;
+          const startVal = oldSt.turn_start_5h ?? currVal;
+          if (startVal > currVal) {
+            oldSt.draining = true;
+            oldSt.drain_start_val = startVal;
+            oldSt.drain_target_val = currVal;
+            oldSt.drain_start_time = performance.now();
+          }
+        }
+
+        // New active account registers start point
+        if (currentActiveId) {
+          let curr5h = 0;
+          for (const a of newAccounts) {
+            if (a.id === currentActiveId) {
+              curr5h = a.gemini_5h.pct;
+              break;
+            }
+          }
+          if (!accStates[currentActiveId]) {
+            accStates[currentActiveId] = {
+              turn_start_5h: curr5h,
+              draining: false,
+              current_5h: curr5h,
+              current_weekly: 0
+            };
+          } else {
+            accStates[currentActiveId].turn_start_5h = curr5h;
+            accStates[currentActiveId].current_5h = curr5h;
+            accStates[currentActiveId].draining = false;
+          }
+        }
+
+        lastActiveId = currentActiveId;
+      } else if (lastActiveId === null && currentActiveId !== null) {
+        lastActiveId = currentActiveId;
+      }
+
+      for (const a of newAccounts) {
+        const id = a.id;
+        const c5 = a.gemini_5h.pct;
+        const cw = a.gemini_weekly.pct;
+
+        if (!accStates[id]) {
+          accStates[id] = {
+            turn_start_5h: c5,
+            draining: false,
+            current_5h: c5,
+            current_weekly: cw
+          };
+        } else {
+          accStates[id].current_5h = c5;
+          accStates[id].current_weekly = cw;
+          if (id === currentActiveId && c5 > (accStates[id].turn_start_5h ?? c5)) {
+            accStates[id].turn_start_5h = c5;
+          }
+        }
+      }
+      savePersistedStates();
+    }
+
+    function getRedPct5h(id, current5h) {
+      const st = accStates[id];
+      if (!st) return current5h;
+      if (st.draining) {
+        const elapsed = (performance.now() - st.drain_start_time) / 1000.0;
+        const duration = 2.0;
+        const progress = Math.min(1.0, elapsed / duration);
+        const val = st.drain_start_val - (st.drain_start_val - st.drain_target_val) * progress;
+        if (progress >= 1.0) {
+          st.draining = false;
+          st.turn_start_5h = st.drain_target_val;
+          savePersistedStates();
+          return st.drain_target_val;
+        }
+        return val;
+      }
+      return Math.max(current5h, st.turn_start_5h ?? current5h);
+    }
+
+    function getRedPctWeekly(id, currentWeekly) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const base = weeklyBaseline[id];
+      if (base && base.day === todayStr) {
+        return Math.max(currentWeekly, base.start_weekly ?? currentWeekly);
+      }
+      weeklyBaseline[id] = { day: todayStr, start_weekly: currentWeekly };
+      savePersistedStates();
+      return currentWeekly;
+    }
+
+    // Render Quota Cards
+    function renderCards() {
+      const container = document.getElementById("cardsList");
+      document.getElementById("accountCountBadge").textContent = `${accounts.length} Accounts`;
+
+      const activeAcc = accounts.find(a => a.isActive);
+      if (activeAcc) {
+        document.getElementById("activeAccountNotice").innerHTML = 
+          `Active: <span style="color: var(--apple-teal); font-weight: 600;">${activeAcc.name}</span>`;
+      }
+
+      if (!accounts.length) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: var(--text-tertiary);">
+            <span class="material-symbols-outlined" style="font-size: 40px; margin-bottom: 8px;">account_circle</span>
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">No Antigravity Accounts Found</div>
+            <div style="font-size: 12px; margin-top: 4px;">Please configure provider accounts in 9Router.</div>
+          </div>
+        `;
+        return;
+      }
+
+      let html = "";
+      accounts.forEach((acc, index) => {
+        const rawName = acc.name || acc.email || "Account";
+        const firstChar = (rawName[0] || "A").toUpperCase();
+        const avatarColor = AVATAR_PALETTE[index % AVATAR_PALETTE.length];
+
+        const g5 = acc.gemini_5h.pct;
+        const gw = acc.gemini_weekly.pct;
+
+        let dotColor = COLOR_APPLE_GREEN;
+        if (g5 <= 0 || gw <= 0) dotColor = COLOR_APPLE_RED;
+        else if (g5 <= 20 || gw <= 20) dotColor = COLOR_APPLE_ORANGE;
+
+        const c5 = getStatusColor(g5);
+        const cw = getStatusColor(gw);
+
+        const red5 = getRedPct5h(acc.id, g5);
+        const redW = getRedPctWeekly(acc.id, gw);
+
+        const isActive = acc.isActive;
+
+        html += `
+          <div class="quota-card ${isActive ? 'active' : ''}">
+            <!-- Col 1: Avatar + Name -->
+            <div class="acc-profile">
+              <div class="avatar-wrap">
+                <div class="avatar-circle" style="background-color: ${avatarColor};">
+                  ${firstChar}
+                </div>
+                <div class="status-dot" style="background-color: ${dotColor};"></div>
+              </div>
+              <div class="acc-details">
+                <div class="acc-name" title="${rawName}">${rawName}</div>
+                <div class="acc-tier-row">
+                  <span class="acc-tier">Antigravity</span>
+                  ${isActive ? '<span class="acc-active-tag">• ACTIVE</span>' : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- Metrics Wrapper (Row in List, 2-Col Grid in Card) -->
+            <div class="quota-metrics-wrap">
+              <!-- Col 2: 5H Session -->
+              <div class="metric-col">
+                <div class="metric-meta">
+                  <div class="metric-lbl-row">
+                    <span class="metric-lbl">5H SESSION</span>
+                    ${acc.gemini_5h.reset ? `<span class="metric-reset">${acc.gemini_5h.reset}</span>` : ''}
+                  </div>
+                  <span class="metric-pct" style="color: ${c5};">${g5}%</span>
+                </div>
+                <div class="capsule-track">
+                  ${red5 > g5 ? `<div class="capsule-red-damage" style="width: ${Math.min(100, Math.max(0, red5))}%;"></div>` : ''}
+                  <div class="capsule-bar-active" style="width: ${Math.min(100, Math.max(0, g5))}%; background-color: ${c5};"></div>
+                </div>
+              </div>
+
+              <!-- Col 3: Weekly -->
+              <div class="metric-col">
+                <div class="metric-meta">
+                  <div class="metric-lbl-row">
+                    <span class="metric-lbl">WEEKLY</span>
+                    ${acc.gemini_weekly.reset ? `<span class="metric-reset">${acc.gemini_weekly.reset}</span>` : ''}
+                  </div>
+                  <span class="metric-pct" style="color: ${cw};">${gw}%</span>
+                </div>
+                <div class="capsule-track">
+                  ${redW > gw ? `<div class="capsule-red-damage" style="width: ${Math.min(100, Math.max(0, redW))}%;"></div>` : ''}
+                  <div class="capsule-bar-active" style="width: ${Math.min(100, Math.max(0, gw))}%; background-color: ${cw};"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    // Fetch Accounts & Quota from 9Router APIs
+    async function fetchQuotaData() {
+      const refreshIcon = document.getElementById("refreshIcon");
+      refreshIcon.style.animation = "spin 0.8s linear infinite";
+
+      try {
+        const res = await fetch("/api/providers/client?pageSize=50");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const allConns = data.connections || [];
+        const agConns = allConns.filter(c => c.provider === "antigravity" && c.isActive !== false);
+        const targetConns = agConns.length ? agConns : allConns;
+
+        const promises = targetConns.map(async (conn) => {
+          const rawName = conn.name || conn.email || "Account";
+          const shortName = rawName.split("@")[0];
+          let gemini5hPct = 0;
+          let gemini5hReset = "";
+          let geminiWeeklyPct = 0;
+          let geminiWeeklyReset = "";
+
+          try {
+            const qRes = await fetch(`/api/usage/${conn.id}`);
+            if (qRes.ok) {
+              const qData = await qRes.json();
+              const q = qData.quotas || {};
+              if (q.gemini_session) {
+                gemini5hPct = Math.round(q.gemini_session.remainingPercentage || 0);
+                gemini5hReset = formatResetTime(q.gemini_session.resetAt);
+              }
+              if (q.gemini_weekly) {
+                geminiWeeklyPct = Math.round(q.gemini_weekly.remainingPercentage || 0);
+                geminiWeeklyReset = formatResetTime(q.gemini_weekly.resetAt);
+              }
+            }
+          } catch (e) {
+            console.warn("Usage fetch error for " + conn.id, e);
+          }
+
+          return {
+            id: conn.id,
+            name: shortName,
+            email: conn.email || rawName,
+            priority: conn.priority ?? 99,
+            lastUsedAt: conn.lastUsedAt || "",
+            gemini_5h: { pct: gemini5hPct, reset: gemini5hReset },
+            gemini_weekly: { pct: geminiWeeklyPct, reset: geminiWeeklyReset }
+          };
+        });
+
+        const results = await Promise.all(promises);
+        results.sort((a, b) => a.priority - b.priority);
+
+        // Identify active account by newest lastUsedAt
+        let activeId = null;
+        let latestTs = "";
+        for (const r of results) {
+          if (r.lastUsedAt && r.lastUsedAt > latestTs) {
+            latestTs = r.lastUsedAt;
+            activeId = r.id;
+          }
+        }
+        for (const r of results) {
+          r.isActive = (r.id === activeId && activeId !== null);
+        }
+
+        accounts = results;
+        updateAccStates(accounts);
+        renderCards();
+      } catch (err) {
+        console.error("Quota fetch failed:", err);
+      } finally {
+        setTimeout(() => {
+          refreshIcon.style.animation = "";
+        }, 500);
+      }
+    }
+
+    // ================= Today's Token & Usage Stats =================
+    function fmtTokens(n) {
+      if (!n || n <= 0) return "0";
+      if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+      return n.toLocaleString();
+    }
+
+    function fmtCost(n) {
+      return "$" + (n || 0).toFixed(2);
+    }
+
+    async function fetchUsageStats() {
+      try {
+        const res = await fetch("/api/usage/stats?period=today");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // 1. Total Requests & Cost
+        const totalReqs = data.totalRequests || 0;
+        const totalCost = data.totalCost || 0;
+        const elReqs = document.getElementById("statRequests");
+        if (elReqs) elReqs.textContent = totalReqs.toLocaleString();
+        const elCost = document.getElementById("statCost");
+        if (elCost) elCost.textContent = `Est. Cost: ~${fmtCost(totalCost)}`;
+
+        // 2. Input Tokens
+        const promptTokens = data.totalPromptTokens || 0;
+        const elInput = document.getElementById("statInput");
+        if (elInput) {
+          elInput.textContent = fmtTokens(promptTokens);
+          elInput.title = promptTokens.toLocaleString() + " tokens";
+        }
+
+        // 3. Cached Tokens
+        const cachedTokens = data.totalCachedTokens || 0;
+        const elCached = document.getElementById("statCached");
+        if (elCached) {
+          elCached.textContent = fmtTokens(cachedTokens);
+          elCached.title = cachedTokens.toLocaleString() + " tokens";
+        }
+        const cacheRate = promptTokens > 0 ? Math.round((cachedTokens / promptTokens) * 100) : 0;
+        const elRate = document.getElementById("statCacheRate");
+        if (elRate) elRate.textContent = `${cacheRate}% hit rate`;
+
+        // 4. Output Tokens
+        const compTokens = data.totalCompletionTokens || 0;
+        const elOutput = document.getElementById("statOutput");
+        if (elOutput) {
+          elOutput.textContent = fmtTokens(compTokens);
+          elOutput.title = compTokens.toLocaleString() + " tokens";
+        }
+
+        // 5. Last updated timestamp
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+        const elUpdated = document.getElementById("usageLastUpdated");
+        if (elUpdated) elUpdated.textContent = `Updated ${timeStr}`;
+
+        // 6. Model Activity Breakdown
+        const byModel = data.byModel || {};
+        const modelEntries = Object.entries(byModel).map(([key, val]) => {
+          const mTokens = (val.promptTokens || 0) + (val.completionTokens || 0);
+          return {
+            name: val.rawModel || key.split(" ")[0] || key,
+            provider: val.provider || "",
+            requests: val.requests || 0,
+            tokens: mTokens,
+            cost: val.cost || 0
+          };
+        });
+
+        modelEntries.sort((a, b) => b.tokens - a.tokens);
+        const elCount = document.getElementById("breakdownModelCount");
+        if (elCount) elCount.textContent = `${modelEntries.length} models`;
+
+        const breakdownList = document.getElementById("breakdownList");
+        if (breakdownList) {
+          if (!modelEntries.length) {
+            breakdownList.innerHTML = `
+              <div style="text-align: center; padding: 14px; color: var(--text-tertiary); font-size: 11px;">
+                No requests recorded today yet.
+              </div>
+            `;
+          } else {
+            const maxTokens = Math.max(1, modelEntries[0].tokens);
+            const topModels = modelEntries.slice(0, 4);
+
+            breakdownList.innerHTML = topModels.map(m => {
+              const pct = Math.min(100, Math.max(4, Math.round((m.tokens / maxTokens) * 100)));
+              return `
+                <div class="breakdown-row">
+                  <div class="breakdown-row-meta">
+                    <span class="breakdown-model-name" title="${m.name} (${m.provider})">
+                      ${m.name}
+                      <span style="font-size: 10px; color: var(--text-tertiary); font-weight: 400; margin-left: 4px;">(${m.provider || "ag"})</span>
+                    </span>
+                    <span class="breakdown-stats">
+                      <strong>${fmtTokens(m.tokens)}</strong> tok • <span>${m.requests} reqs</span>
+                    </span>
+                  </div>
+                  <div class="breakdown-track">
+                    <div class="breakdown-fill" style="width: ${pct}%;"></div>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          }
+        }
+      } catch (err) {
+        console.warn("Fetch usage stats error:", err);
+      }
+    }
+
+    function connectUsageSSE() {
+      try {
+        const es = new EventSource("/api/usage/stream");
+        es.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data && data.activeRequests !== undefined) {
+              const notice = document.getElementById("activeReqsNotice");
+              const countEl = document.getElementById("activeReqsCount");
+              if (notice && countEl) {
+                if (data.activeRequests > 0) {
+                  countEl.textContent = data.activeRequests;
+                  notice.style.display = "inline-flex";
+                } else {
+                  notice.style.display = "none";
+                }
+              }
+            }
+          } catch (_) {}
+        };
+      } catch (_) {}
+    }
+    connectUsageSSE();
+
+    // Refresh Loop
+    document.getElementById("refreshBtn").addEventListener("click", () => {
+      countdown = REFRESH_INTERVAL;
+      fetchQuotaData();
+      fetchUsageStats();
+    });
+
+    setInterval(() => {
+      countdown--;
+      document.getElementById("countdownText").textContent = `${countdown}s`;
+      if (countdown <= 0) {
+        countdown = REFRESH_INTERVAL;
+        fetchQuotaData();
+        fetchUsageStats();
+      }
+    }, 1000);
+
+    fetchQuotaData();
+    fetchUsageStats();
+
+    // Live Animation Loop for PUBG Red Drain
+    function animLoop() {
+      let needsRedraw = false;
+      for (const st of Object.values(accStates)) {
+        if (st.draining) {
+          needsRedraw = true;
+          break;
+        }
+      }
+      if (needsRedraw) {
+        renderCards();
+      }
+      requestAnimationFrame(animLoop);
+    }
+    requestAnimationFrame(animLoop);
+
+    // ================= Live Console SSE Stream =================
+    const consoleBody = document.getElementById("consoleBody");
+    const sseStatus = document.getElementById("sseStatus");
+    const sseStatusText = document.getElementById("sseStatusText");
+
+    function parseLogLine(raw) {
+      if (typeof raw !== "string") return raw;
+      
+      let html = "";
+      let remaining = raw;
+
+      const tsMatch = remaining.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*/);
+      if (tsMatch) {
+        html += `<span class="log-ts">${tsMatch[1]}</span>`;
+        remaining = remaining.slice(tsMatch[0].length);
+      }
+
+      if (remaining.includes("❌") || remaining.includes("[ERROR]") || remaining.includes("failed")) {
+        html += `<span class="log-error">${remaining}</span>`;
+      } else if (remaining.includes("DONE") || remaining.includes("📊")) {
+        html += `<span class="log-done">${remaining}</span>`;
+      } else if (remaining.includes("POST") || remaining.includes("▶")) {
+        html += `<span class="log-post">${remaining}</span>`;
+      } else if (remaining.includes("[TOKEN_REFRESH]")) {
+        html += `<span class="log-refresh">${remaining}</span>`;
+      } else {
+        html += `<span class="log-generic">${remaining}</span>`;
+      }
+
+      return `<div class="log-line">${html}</div>`;
+    }
+
+    function renderLogs() {
+      const filtered = logs.filter(line => {
+        if (activeFilter === "requests") return line.includes("POST") || line.includes("▶");
+        if (activeFilter === "done") return line.includes("DONE") || line.includes("📊");
+        if (activeFilter === "errors") return line.includes("❌") || line.includes("ERROR") || line.includes("failed");
+        return true;
+      });
+
+      document.getElementById("logCountBadge").textContent = filtered.length;
+
+      if (!filtered.length) {
+        consoleBody.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+            <span class="material-symbols-outlined" style="font-size: 28px; margin-bottom: 6px;">terminal</span>
+            <div>No matching console logs</div>
+          </div>
+        `;
+        return;
+      }
+
+      consoleBody.innerHTML = filtered.map(parseLogLine).join("");
+
+      if (autoScroll) {
+        consoleBody.scrollTop = consoleBody.scrollHeight;
+      }
+    }
+
+    function connectSSE() {
+      const es = new EventSource("/api/translator/console-logs/stream");
+
+      es.onopen = () => {
+        sseStatus.className = "sse-status sse-connected";
+        sseStatusText.textContent = "LIVE";
+      };
+
+      es.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "init") {
+            logs = (msg.logs || []).slice(-300);
+            renderLogs();
+          } else if (msg.type === "line") {
+            logs.push(msg.line);
+            if (logs.length > 300) logs.shift();
+            renderLogs();
+          } else if (msg.type === "lines") {
+            logs = logs.concat(msg.lines).slice(-300);
+            renderLogs();
+          } else if (msg.type === "clear") {
+            logs = [];
+            renderLogs();
+          }
+        } catch (err) {
+          console.error("SSE parse error", err);
+        }
+      };
+
+      es.onerror = () => {
+        sseStatus.className = "sse-status sse-disconnected";
+        sseStatusText.textContent = "RECONNECTING";
+        es.close();
+        setTimeout(connectSSE, 3000);
+      };
+    }
+    connectSSE();
+
+    // Filter Buttons
+    document.querySelectorAll(".console-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".console-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        activeFilter = tab.dataset.filter;
+        renderLogs();
+      });
+    });
+
+    // Auto-scroll toggle
+    const autoScrollBtn = document.getElementById("autoScrollBtn");
+    autoScrollBtn.addEventListener("click", () => {
+      autoScroll = !autoScroll;
+      autoScrollBtn.classList.toggle("active", autoScroll);
+      if (autoScroll) {
+        consoleBody.scrollTop = consoleBody.scrollHeight;
+      }
+    });
+
+    consoleBody.addEventListener("wheel", () => {
+      const { scrollTop, scrollHeight, clientHeight } = consoleBody;
+      if (scrollHeight - scrollTop - clientHeight > 30) {
+        autoScroll = false;
+        autoScrollBtn.classList.remove("active");
+      }
+    });
+
+    // Clear logs
+    document.getElementById("clearLogsBtn").addEventListener("click", async () => {
+      try {
+        await fetch("/api/translator/console-logs", { method: "DELETE" });
+        logs = [];
+        renderLogs();
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  </script>
+</body>
+</html>
