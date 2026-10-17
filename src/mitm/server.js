@@ -74,17 +74,32 @@ try {
 // ── Helpers ───────────────────────────────────────────────────
 
 const cachedTargetIPs = {};
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
+
+function clearTargetIPCache(hostname) {
+  if (hostname) {
+    delete cachedTargetIPs[hostname];
+  } else {
+    for (const k of Object.keys(cachedTargetIPs)) {
+      delete cachedTargetIPs[k];
+    }
+  }
+}
 
 async function resolveTargetIP(hostname) {
   const cached = cachedTargetIPs[hostname];
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.ip;
-  const resolver = new dns.Resolver();
-  resolver.setServers(["8.8.8.8"]);
-  const resolve4 = promisify(resolver.resolve4.bind(resolver));
-  const addresses = await resolve4(hostname);
-  cachedTargetIPs[hostname] = { ip: addresses[0], ts: Date.now() };
-  return cachedTargetIPs[hostname].ip;
+  try {
+    const resolver = new dns.Resolver();
+    resolver.setServers(["8.8.8.8"]);
+    const resolve4 = promisify(resolver.resolve4.bind(resolver));
+    const addresses = await resolve4(hostname);
+    cachedTargetIPs[hostname] = { ip: addresses[0], ts: Date.now() };
+    return cachedTargetIPs[hostname].ip;
+  } catch (e) {
+    delete cachedTargetIPs[hostname];
+    throw e;
+  }
 }
 
 function collectBodyRaw(req) {
@@ -191,19 +206,45 @@ async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onRes
   h2Headers[":authority"] = targetHost;
 
   return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    };
+
+    const tlsSocket = tls.connect({
+      host: targetIP, port: 443, servername: targetHost,
+      ALPNProtocols: ["h2"], rejectUnauthorized: false,
+    });
+
+    const connectTimer = setTimeout(() => {
+      clearTargetIPCache(targetHost);
+      tlsSocket.destroy(new Error(`connect timeout (${targetIP}:443)`));
+    }, 8000);
+
+    tlsSocket.once("secureConnect", () => {
+      clearTimeout(connectTimer);
+    });
+
+    tlsSocket.once("error", () => {
+      clearTimeout(connectTimer);
+      clearTargetIPCache(targetHost);
+    });
+
     const client = http2.connect(`https://${targetHost}`, {
-      createConnection: () => tls.connect({
-        host: targetIP, port: 443, servername: targetHost,
-        ALPNProtocols: ["h2"], rejectUnauthorized: false,
-      }),
+      createConnection: () => tlsSocket,
     });
     client.once("error", (e) => {
+      clearTimeout(connectTimer);
+      clearTargetIPCache(targetHost);
       err(`[mitm] http2 client error: ${e.message}`);
       if (dumper) { dumper.writeChunk(`\n[ERROR h2] ${e.message}\n`); dumper.end(); }
       if (!res.headersSent) res.writeHead(502);
       if (!res.writableEnded) res.end("Bad Gateway");
       try { client.close(); } catch {}
-      resolve();
+      safeResolve();
     });
 
     const stream = client.request(h2Headers, { endStream: bodyBuffer.length === 0 });
@@ -232,16 +273,18 @@ async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onRes
         if (!res.writableEnded) res.end();
         if (onResponse) try { onResponse(Buffer.concat(chunks), outHeaders); } catch {}
         try { client.close(); } catch {}
-        resolve();
+        safeResolve();
       });
     });
     stream.once("error", (e) => {
+      clearTimeout(connectTimer);
+      clearTargetIPCache(targetHost);
       err(`[mitm] http2 stream error: ${e.message}`);
       if (dumper) { dumper.writeChunk(`\n[ERROR h2-stream] ${e.message}\n`); dumper.end(); }
       if (!res.headersSent) res.writeHead(502);
       if (!res.writableEnded) res.end();
       try { client.close(); } catch {}
-      resolve();
+      safeResolve();
     });
   });
 }
@@ -256,7 +299,8 @@ async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onRes
     method: req.method,
     headers,
     servername: targetHost,
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    timeout: 8000,
   }, (forwardRes) => {
     res.writeHead(forwardRes.statusCode, forwardRes.headers);
     if (dumper) dumper.writeHeader(forwardRes.statusCode, forwardRes.headers);
@@ -279,7 +323,13 @@ async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onRes
     });
   });
 
+  forwardReq.on("timeout", () => {
+    clearTargetIPCache(targetHost);
+    forwardReq.destroy(new Error(`timeout connecting to ${targetIP}:443`));
+  });
+
   forwardReq.on("error", (e) => {
+    clearTargetIPCache(targetHost);
     err(`Passthrough error: ${e.message}`);
     if (dumper) { dumper.writeChunk(`\n[ERROR] ${e.message}\n`); dumper.end(); }
     if (!res.headersSent) res.writeHead(502);

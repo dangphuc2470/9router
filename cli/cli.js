@@ -4,16 +4,57 @@ const { spawn, exec, execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
+const http = require("http");
 const net = require("net");
 const os = require("os");
 
 // Poll until the server accepts TCP connections on port, or timeout — avoids blind fixed waits.
+function autoStartMitmAndDns(port) {
+  try {
+    const postReq = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: "/api/cli-tools/antigravity-mitm",
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      },
+      (res) => {
+        res.resume();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          const patchReq = http.request(
+            {
+              hostname: "127.0.0.1",
+              port,
+              path: "/api/cli-tools/antigravity-mitm",
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" }
+            },
+            (pRes) => pRes.resume()
+          );
+          patchReq.on("error", () => {});
+          patchReq.write(JSON.stringify({ tool: "antigravity", action: "enable" }));
+          patchReq.end();
+        }
+      }
+    );
+    postReq.on("error", () => {});
+    postReq.write(JSON.stringify({ apiKey: "sk_9router" }));
+    postReq.end();
+  } catch (_) {}
+}
+
 function waitServerReady(port, { timeoutMs = 15000, intervalMs = 150 } = {}) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve) => {
     const tryConnect = () => {
       const socket = net.connect({ host: "127.0.0.1", port }, () => {
         socket.destroy();
+        // Warmup internal app so Next.js App Router hydrates layout.js -> bootstrap.js -> autoStartMitm()
+        try {
+          http.get(`http://127.0.0.1:${port}/dashboard`, () => {}).on("error", () => {});
+        } catch (_) {}
+        autoStartMitmAndDns(port);
         resolve(true);
       });
       socket.on("error", () => {

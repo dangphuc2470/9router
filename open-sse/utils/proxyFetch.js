@@ -149,6 +149,7 @@ async function resolveRealIP(hostname) {
     return addresses[0];
   } catch (error) {
     console.warn(`[ProxyFetch] DNS resolve failed for ${hostname}:`, error.message);
+    DNS_CACHE.delete(hostname);
     return null;
   }
 }
@@ -266,6 +267,10 @@ async function fetchWithTlsFallback(url, options, proxyUrl) {
       const insecureDispatcher = await getDispatcher(proxyUrl, true);
       return await originalFetch(url, { ...options, dispatcher: insecureDispatcher });
     }
+    // Network / broken socket failure: clear dispatcher cache so broken connections aren't reused
+    if (err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.code === "EPIPE" || err.message?.includes("fetch failed")) {
+      proxyDispatchers.clear();
+    }
     throw err;
   }
 }
@@ -282,8 +287,23 @@ async function createBypassRequest(parsedUrl, realIP, options) {
 
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
+    let settled = false;
+
+    const cleanupAndReject = (err) => {
+      DNS_CACHE.delete(parsedUrl.hostname);
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    };
+
+    socket.setTimeout(8000, () => {
+      cleanupAndReject(new Error(`Connect timeout to ${realIP}:443`));
+      socket.destroy();
+    });
 
     socket.connect(HTTPS_PORT, realIP, () => {
+      socket.setTimeout(0);
       const reqOptions = {
         socket,
         // SNI + cert hostname are validated against the hostname the caller
@@ -302,6 +322,9 @@ async function createBypassRequest(parsedUrl, realIP, options) {
       };
 
       const req = https.request(reqOptions, (res) => {
+        if (!settled) {
+          settled = true;
+        }
         const response = {
           ok: res.statusCode >= HTTP_SUCCESS_MIN && res.statusCode < HTTP_SUCCESS_MAX,
           status: res.statusCode,
@@ -318,14 +341,14 @@ async function createBypassRequest(parsedUrl, realIP, options) {
         resolve(response);
       });
 
-      req.on("error", reject);
+      req.on("error", cleanupAndReject);
       if (options.body) {
         req.write(typeof options.body === "string" ? options.body : JSON.stringify(options.body));
       }
       req.end();
     });
 
-    socket.on("error", reject);
+    socket.on("error", cleanupAndReject);
   });
 }
 

@@ -99,7 +99,7 @@ async function runHeavyStartup() {
 
   if (settings.tunnelEnabled) ensureCloudflared().catch(() => {});
 
-  if (settings.mitmEnabled) {
+  if (settings.mitmEnabled || settings.mitmSudoEncrypted) {
     // Sync mitmAlias DB → JSON cache so standalone MITM server can read it.
     syncMitmAliasCache().catch(() => {});
     autoStartMitm(settings);
@@ -133,7 +133,7 @@ async function autoStartMitm(settings) {
   if (g.mitmStartInProgress) return;
   g.mitmStartInProgress = true;
   try {
-    if (!settings.mitmEnabled) return;
+    if (!settings.mitmEnabled && !settings.mitmSudoEncrypted) return;
     const mitmStatus = await getMitmStatus();
     if (mitmStatus.running) return;
 
