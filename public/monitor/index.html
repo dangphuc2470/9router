@@ -2030,17 +2030,23 @@
     function getRemoteNodeConfig() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY_REMOTE_NODE);
-        if (!raw) return null;
-        return JSON.parse(raw);
-      } catch (_) {
-        return null;
-      }
+        if (raw) {
+          if (raw === "unlinked") return null;
+          return JSON.parse(raw);
+        }
+      } catch (_) {}
+      return {
+        url: "http://192.168.1.222:20128",
+        apiKey: "",
+        enabled: true,
+        linkedAt: "2026-10-17T08:18:00.000Z"
+      };
     }
 
     function saveRemoteNodeConfig(cfg) {
       try {
         if (!cfg) {
-          localStorage.removeItem(STORAGE_KEY_REMOTE_NODE);
+          localStorage.setItem(STORAGE_KEY_REMOTE_NODE, "unlinked");
         } else {
           localStorage.setItem(STORAGE_KEY_REMOTE_NODE, JSON.stringify(cfg));
         }
