@@ -177,13 +177,40 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 3px 9px;
+      padding: 3px 10px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 600;
       background: rgba(48, 209, 88, 0.12);
       border: 1px solid rgba(48, 209, 88, 0.25);
       color: var(--apple-green);
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .live-chip.mitm-active {
+      background: rgba(48, 209, 88, 0.12);
+      border-color: rgba(48, 209, 88, 0.28);
+      color: var(--apple-green);
+      cursor: pointer;
+    }
+
+    .live-chip.mitm-inactive {
+      background: rgba(255, 69, 58, 0.14);
+      border-color: rgba(255, 69, 58, 0.35);
+      color: var(--apple-red);
+      cursor: pointer;
+    }
+
+    .live-chip.mitm-dns-off {
+      background: rgba(255, 159, 10, 0.14);
+      border-color: rgba(255, 159, 10, 0.35);
+      color: var(--apple-orange);
+      cursor: pointer;
+    }
+
+    .live-chip:hover {
+      filter: brightness(1.15);
     }
 
     .dot-live {
@@ -194,9 +221,31 @@
       animation: pulse 1.8s infinite;
     }
 
+    .dot-live.dot-red {
+      background-color: var(--apple-red);
+      animation: pulse-red 1.2s infinite;
+    }
+
+    .dot-live.dot-orange {
+      background-color: var(--apple-orange);
+      animation: pulse-orange 1.5s infinite;
+    }
+
     @keyframes pulse {
       0% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes pulse-red {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.25; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes pulse-orange {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.85); }
       100% { opacity: 1; transform: scale(1); }
     }
 
@@ -942,9 +991,9 @@
       <div class="title-group">
         <span class="title-text">Quota Monitor</span>
         <span class="badge-9router">9ROUTER</span>
-        <div class="live-chip">
-          <span class="dot-live"></span>
-          <span>LIVE</span>
+        <div class="live-chip mitm-inactive" id="mitmStatusChip" title="Checking MITM Status...">
+          <span class="dot-live dot-red" id="mitmDot"></span>
+          <span id="mitmText">MITM: ...</span>
         </div>
       </div>
     </div>
@@ -1086,7 +1135,7 @@
           <div class="console-controls">
             <div class="sse-status sse-disconnected" id="sseStatus">
               <span class="dot-live" style="background-color: currentColor;"></span>
-              <span id="sseStatusText">CONNECTING</span>
+              <span id="sseStatusText">LOGS: DISCONNECTED</span>
             </div>
             <button class="console-btn active" id="autoScrollBtn" title="Lock scroll to bottom">
               <span class="material-symbols-outlined">vertical_align_bottom</span>
@@ -1595,6 +1644,9 @@
             email: conn.email || rawName,
             priority: conn.priority ?? 99,
             lastUsedAt: conn.lastUsedAt || "",
+            consecutiveUseCount: conn.consecutiveUseCount || 0,
+            testStatus: conn.testStatus || "active",
+            isConnActive: conn.isActive !== false,
             gemini_5h: { pct: gemini5hPct, reset: gemini5hReset },
             gemini_weekly: { pct: geminiWeeklyPct, reset: geminiWeeklyReset }
           };
@@ -1603,15 +1655,36 @@
         const results = await Promise.all(promises);
         results.sort((a, b) => a.priority - b.priority);
 
-        // Identify active account by newest lastUsedAt
+        // Smart active account detection matching 9Router rotation:
+        // Candidates must be enabled, available, and have non-zero quota
+        const available = results.filter(r => r.isConnActive && r.testStatus !== "unavailable" && (r.gemini_5h.pct > 0 || r.gemini_weekly.pct > 0));
         let activeId = null;
-        let latestTs = "";
-        for (const r of results) {
-          if (r.lastUsedAt && r.lastUsedAt > latestTs) {
-            latestTs = r.lastUsedAt;
-            activeId = r.id;
+
+        if (available.length > 0) {
+          // Sort by lastUsedAt desc (most recent first)
+          const sortedByRecency = [...available].sort((a, b) => {
+            if (!a.lastUsedAt && !b.lastUsedAt) return a.priority - b.priority;
+            if (!a.lastUsedAt) return 1;
+            if (!b.lastUsedAt) return -1;
+            return new Date(b.lastUsedAt) - new Date(a.lastUsedAt);
+          });
+
+          const current = sortedByRecency[0];
+          const stickyLimit = 3;
+          if (current && current.lastUsedAt && (current.consecutiveUseCount || 0) < stickyLimit) {
+            activeId = current.id;
+          } else {
+            // Turn finished for current; pick least recently used among available
+            const sortedByOldest = [...available].sort((a, b) => {
+              if (!a.lastUsedAt && !b.lastUsedAt) return a.priority - b.priority;
+              if (!a.lastUsedAt) return -1;
+              if (!b.lastUsedAt) return 1;
+              return new Date(a.lastUsedAt) - new Date(b.lastUsedAt);
+            });
+            activeId = sortedByOldest[0]?.id || null;
           }
         }
+
         for (const r of results) {
           r.isActive = (r.id === activeId && activeId !== null);
         }
@@ -1767,11 +1840,92 @@
     }
     connectUsageSSE();
 
+    // ================= MITM Status & Controls =================
+    async function fetchMitmStatus() {
+      const chip = document.getElementById("mitmStatusChip");
+      const dot = document.getElementById("mitmDot");
+      const text = document.getElementById("mitmText");
+      if (!chip || !dot || !text) return;
+
+      try {
+        const res = await fetch("/api/cli-tools/antigravity-mitm");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+
+        const isRunning = data && data.running === true;
+        const isDnsHijacked = data && data.dnsStatus && data.dnsStatus.antigravity === true;
+
+        if (isRunning && isDnsHijacked) {
+          chip.className = "live-chip mitm-active";
+          chip.title = "MITM Proxy & Antigravity DNS Interceptor are ACTIVE. Click to manage.";
+          dot.className = "dot-live";
+          text.textContent = "MITM: ON";
+        } else if (isRunning && !isDnsHijacked) {
+          chip.className = "live-chip mitm-dns-off";
+          chip.title = "MITM Server is running but DNS Hijack is OFF! Click to enable DNS.";
+          dot.className = "dot-live dot-orange";
+          text.textContent = "DNS: OFF";
+        } else {
+          chip.className = "live-chip mitm-inactive";
+          chip.title = "MITM Proxy is OFF! Requests will bypass 9Router. Click to START.";
+          dot.className = "dot-live dot-red";
+          text.textContent = "MITM: OFF";
+        }
+      } catch (e) {
+        chip.className = "live-chip mitm-inactive";
+        chip.title = "Cannot reach 9Router MITM endpoint";
+        dot.className = "dot-live dot-red";
+        text.textContent = "MITM: --";
+      }
+    }
+
+    let isStartingMitm = false;
+    const mitmChipEl = document.getElementById("mitmStatusChip");
+    if (mitmChipEl) {
+      mitmChipEl.addEventListener("click", async () => {
+        if (mitmChipEl.classList.contains("mitm-active")) {
+          window.open("/dashboard/cli-tools", "_blank");
+          return;
+        }
+        if (isStartingMitm) return;
+        isStartingMitm = true;
+        const textEl = document.getElementById("mitmText");
+        if (textEl) textEl.textContent = "STARTING...";
+
+        try {
+          const postRes = await fetch("/api/cli-tools/antigravity-mitm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey: "sk_9router" })
+          });
+          const postData = await postRes.json();
+          if (!postRes.ok) throw new Error(postData.error || "Failed to start MITM server");
+
+          const patchRes = await fetch("/api/cli-tools/antigravity-mitm", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "antigravity", action: "enable" })
+          });
+          const patchData = await patchRes.json();
+          if (!patchRes.ok) throw new Error(patchData.error || "Failed to enable DNS");
+
+          await fetchMitmStatus();
+        } catch (err) {
+          alert("MITM Start: " + err.message + "\\nOpening CLI Tools dashboard for manual activation...");
+          window.open("/dashboard/cli-tools", "_blank");
+          await fetchMitmStatus();
+        } finally {
+          isStartingMitm = false;
+        }
+      });
+    }
+
     // Refresh Loop
     document.getElementById("refreshBtn").addEventListener("click", () => {
       countdown = REFRESH_INTERVAL;
       fetchQuotaData();
       fetchUsageStats();
+      fetchMitmStatus();
     });
 
     setInterval(() => {
@@ -1781,11 +1935,13 @@
         countdown = REFRESH_INTERVAL;
         fetchQuotaData();
         fetchUsageStats();
+        fetchMitmStatus();
       }
     }, 1000);
 
     fetchQuotaData();
     fetchUsageStats();
+    fetchMitmStatus();
 
     // Live Animation Loop for PUBG Red Drain
     function animLoop() {
@@ -1867,7 +2023,7 @@
 
       es.onopen = () => {
         sseStatus.className = "sse-status sse-connected";
-        sseStatusText.textContent = "LIVE";
+        sseStatusText.textContent = "LOGS: LIVE";
       };
 
       es.onmessage = (e) => {
