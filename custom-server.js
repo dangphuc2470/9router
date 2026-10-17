@@ -209,26 +209,50 @@ http.createServer = (...args) => {
           headers["x-api-key"] = key;
         }
         const preq = mod.request(targetUrl, { method: "GET", headers, timeout: 6000 }, (pres) => {
+          if (res.headersSent) return;
           res.writeHead(pres.statusCode || 200, {
             "Content-Type": "application/json; charset=utf-8",
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "no-store",
           });
           pres.pipe(res);
+          pres.on("error", () => {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+              res.end(JSON.stringify({ error: "Remote stream error" }));
+            } else {
+              try { res.destroy(); } catch (_) {}
+            }
+          });
         });
+
+        req.on("close", () => {
+          try { preq.destroy(); } catch (_) {}
+        });
+
         preq.on("timeout", () => {
-          preq.destroy();
-          res.writeHead(504, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-          res.end(JSON.stringify({ error: "Connection to remote machine timed out" }));
+          try { preq.destroy(); } catch (_) {}
+          if (!res.headersSent) {
+            res.writeHead(504, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ error: "Connection to remote machine timed out" }));
+          }
         });
+
         preq.on("error", (err) => {
-          res.writeHead(502, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-          res.end(JSON.stringify({ error: err.message || "Failed to reach remote instance" }));
+          if (!res.headersSent) {
+            res.writeHead(502, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ error: err && err.message ? err.message : "Failed to reach remote instance" }));
+          } else {
+            try { res.destroy(); } catch (_) {}
+          }
         });
+
         preq.end();
       } catch (err) {
-        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-        res.end(JSON.stringify({ error: "Invalid target URL" }));
+        if (!res.headersSent) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "Invalid target URL" }));
+        }
       }
       return;
     }
