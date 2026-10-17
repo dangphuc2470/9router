@@ -482,21 +482,9 @@
       box-shadow: var(--card-shadow);
     }
 
+    .quota-card.most-recent,
     .quota-card.active {
       background-color: var(--card-active-bg);
-      border-color: var(--card-active-border);
-      box-shadow: var(--card-active-shadow);
-    }
-
-    .quota-card.active::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 12px;
-      bottom: 12px;
-      width: 3px;
-      border-radius: 0 3px 3px 0;
-      background-color: var(--apple-teal);
     }
 
     /* Account Profile */
@@ -535,6 +523,7 @@
       border: 2px solid var(--card-bg);
     }
 
+    .quota-card.most-recent .status-dot,
     .quota-card.active .status-dot {
       border-color: var(--card-active-bg);
     }
@@ -568,18 +557,13 @@
 
     @keyframes card-call-flash {
       0% {
-        background-color: var(--card-bg);
-        border-color: var(--card-border);
+        background-color: var(--card-active-bg);
       }
-      25% {
-        background-color: rgba(100, 210, 255, 0.08);
-        border-color: rgba(100, 210, 255, 0.35);
-        box-shadow: 0 0 14px rgba(100, 210, 255, 0.08);
+      30% {
+        background-color: rgba(100, 210, 255, 0.14);
       }
       100% {
-        background-color: var(--card-bg);
-        border-color: var(--card-border);
-        box-shadow: none;
+        background-color: var(--card-active-bg);
       }
     }
 
@@ -1453,6 +1437,7 @@
     const accStates = {};
     const weeklyBaseline = {};
     let lastActiveId = null;
+    let currentMostRecentId = null;
 
     // 1. Fast instant load from local browser cache
     try {
@@ -1814,8 +1799,10 @@
         const red5 = getRedPct5h(acc.id, g5);
         const redW = getRedPctWeekly(acc.id, gw);
 
+        const isRecent = acc.isMostRecent || (acc.id === currentMostRecentId);
+
         html += `
-          <div class="quota-card" data-acc-id="${acc.id}" data-acc-email="${acc.email || ''}">
+          <div class="quota-card ${isRecent ? 'most-recent' : ''}" data-acc-id="${acc.id}" data-acc-email="${acc.email || ''}">
             <!-- Col 1: Avatar + Name -->
             <div class="acc-profile">
               <div class="avatar-wrap">
@@ -2008,7 +1995,19 @@
           }
         }
 
+        // Determine the most recently called account
+        let mostRecentId = currentMostRecentId;
+        const withLastUsed = results.filter(r => r.lastUsedAt);
+        if (withLastUsed.length > 0) {
+          withLastUsed.sort((a, b) => new Date(b.lastUsedAt) - new Date(a.lastUsedAt));
+          mostRecentId = withLastUsed[0].id;
+        } else if (!mostRecentId && results.length > 0) {
+          mostRecentId = results[0].id;
+        }
+        currentMostRecentId = mostRecentId;
+
         for (const r of results) {
+          r.isMostRecent = (r.id === mostRecentId && mostRecentId !== null);
           r.isActive = (r.id === activeId && activeId !== null);
         }
 
@@ -2369,10 +2368,12 @@
       if (!emailOrId) return;
       const cleanTarget = emailOrId.toLowerCase().trim();
       const cardEls = document.querySelectorAll(".quota-card");
+      let matchedCard = null;
       cardEls.forEach(card => {
         const cId = (card.getAttribute("data-acc-id") || "").toLowerCase();
         const cEmail = (card.getAttribute("data-acc-email") || "").toLowerCase();
         if (cId === cleanTarget || cEmail.includes(cleanTarget) || cleanTarget.includes(cEmail.split("@")[0])) {
+          matchedCard = card;
           card.classList.remove("just-called");
           void card.offsetWidth; // force reflow for CSS animation restart
           card.classList.add("just-called");
@@ -2381,6 +2382,23 @@
           }, 1100);
         }
       });
+
+      if (matchedCard) {
+        const newRecentId = matchedCard.getAttribute("data-acc-id");
+        if (newRecentId) {
+          currentMostRecentId = newRecentId;
+          accounts.forEach(a => {
+            a.isMostRecent = (a.id === newRecentId);
+          });
+          cardEls.forEach(c => {
+            if (c === matchedCard) {
+              c.classList.add("most-recent");
+            } else {
+              c.classList.remove("most-recent");
+            }
+          });
+        }
+      }
     }
 
     function triggerAccountFlashFromLine(line) {
