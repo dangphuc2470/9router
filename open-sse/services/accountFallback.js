@@ -128,13 +128,31 @@ export function getModelLockKey(model) {
   return model ? `${MODEL_LOCK_PREFIX}${model}` : MODEL_LOCK_ALL;
 }
 
-/**
- * Check if a model lock on a connection is still active.
- * Reads flat field `modelLock_${model}` (or `modelLock___all` when model=null).
- */
 export function isModelLockActive(connection, model) {
-  const key = getModelLockKey(model);
-  const expiry = connection[key] || connection[MODEL_LOCK_ALL];
+  if (!connection) return false;
+  const isAntigravity = connection.provider === "antigravity" || connection.authType === "antigravity";
+  const m = model ? String(model).toLowerCase() : "";
+  const isClaudeGpt = m.startsWith("claude") || m.startsWith("gpt");
+  const isGemini = m.startsWith("gemini");
+
+  let expiry = null;
+  if (model) {
+    const key = getModelLockKey(model);
+    expiry = connection[key];
+    if (!expiry) {
+      if (isClaudeGpt) {
+        expiry = connection[`${MODEL_LOCK_PREFIX}claude_gpt`];
+      } else if (isGemini) {
+        expiry = connection[`${MODEL_LOCK_PREFIX}gemini`];
+      }
+    }
+  }
+
+  // Only check account-wide lock if not Antigravity or if model family is unspecified
+  if (!expiry && (!isAntigravity || (!isClaudeGpt && !isGemini))) {
+    expiry = connection[MODEL_LOCK_ALL];
+  }
+
   if (!expiry) return false;
   return new Date(expiry).getTime() > Date.now();
 }

@@ -3,7 +3,7 @@ import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/con
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
-import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota.js";
+import { getAntigravityQuotaCache, getAntigravityModelQuota, getAntigravityModelFamily, getModelOrFamilyQuota } from "./antigravityQuota.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection
@@ -89,13 +89,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       if (isModelLockActive(c, model)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
       if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
-      // Antigravity: skip if live quota exhausted for this model
+      // Antigravity: skip if live quota exhausted for this model or its quota family
       if (isAntigravity && model && antigravityQuotaCache) {
-        const connQuotas = antigravityQuotaCache.get(c.id);
-        const quota = getAntigravityModelQuota(connQuotas, model) || connQuotas?.[model];
-        if (quota && quota.remainingPercentage <= 0 && quota.resetAt && new Date(quota.resetAt).getTime() > Date.now()) {
+        const cachedQuotas = antigravityQuotaCache.get(c.id);
+        const quota = getModelOrFamilyQuota(cachedQuotas, model) || getAntigravityModelQuota(cachedQuotas, model) || cachedQuotas?.[model];
+        if (quota && (quota.remainingPercentage <= 0 || quota.disabled === true) && quota.resetAt && new Date(quota.resetAt).getTime() > Date.now()) {
           const account = c.id?.slice(0, 8) || "unknown";
-          log.info("AG_QUOTA", `${account} | CACHE_BLOCK ${model} — skip upstream until ${quota.resetAt}`);
+          const family = getAntigravityModelFamily(model);
+          log.info("AG_QUOTA", `${account} | CACHE_BLOCK ${model} [${family || "none"}] — skip upstream until ${quota.resetAt}`);
           return false;
         }
       }
@@ -118,8 +119,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const expiries = lockedConns.map(c => getEarliestModelLockUntil(c)).filter(Boolean);
       if (isAntigravity && model && antigravityQuotaCache) {
         connections.forEach((c) => {
-          const connQuotas = antigravityQuotaCache.get(c.id);
-          const quota = getAntigravityModelQuota(connQuotas, model) || connQuotas?.[model];
+          const cachedQuotas = antigravityQuotaCache.get(c.id);
+          const quota = getModelOrFamilyQuota(cachedQuotas, model) || getAntigravityModelQuota(cachedQuotas, model) || cachedQuotas?.[model];
           const resetAt = quota?.resetAt;
           if (resetAt && new Date(resetAt).getTime() > Date.now()) expiries.push(resetAt);
         });
@@ -272,18 +273,36 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
 
   const reason = typeof errorText === "string" ? errorText.slice(0, 200) : "Provider error";
-  const lockUpdate = buildModelLockUpdate(githubResetAtMs ? null : model, cooldownMs);
+  const isAntigravity = resolveProviderId(provider) === "antigravity";
+  let lockUpdate = {};
 
-  await updateProviderConnection(connectionId, {
+  if (isAntigravity && model) {
+    const family = getAntigravityModelFamily(model);
+    if (family) {
+      lockUpdate = {
+        ...buildModelLockUpdate(family, cooldownMs),
+        ...buildModelLockUpdate(model, cooldownMs)
+      };
+    } else {
+      lockUpdate = buildModelLockUpdate(model, cooldownMs);
+    }
+  } else {
+    lockUpdate = buildModelLockUpdate(githubResetAtMs ? null : model, cooldownMs);
+  }
+
+  const isAntigravityFamilyRateLimit = isAntigravity && (status === 409 || status === 429);
+  const updatePayload = {
     ...lockUpdate,
-    testStatus: "unavailable",
+    ...(isAntigravityFamilyRateLimit ? {} : { testStatus: "unavailable" }),
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
     backoffLevel: newBackoffLevel ?? backoffLevel
-  });
+  };
 
-  const lockKey = Object.keys(lockUpdate)[0];
+  await updateProviderConnection(connectionId, updatePayload);
+
+  const lockKey = Object.keys(lockUpdate).join(", ");
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
   log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
 
@@ -311,10 +330,14 @@ export async function clearAccountError(connectionId, currentConnection, model =
 
   if (!conn.testStatus && !conn.lastError && allLockKeys.length === 0) return;
 
-  // Keys to clear: current model's lock + all expired locks
+  const isAntigravity = conn.provider === "antigravity" || conn.authType === "antigravity";
+  const family = isAntigravity && model ? getAntigravityModelFamily(model) : null;
+
+  // Keys to clear: current model's lock + current family lock (if applicable) + all expired locks
   const keysToClear = allLockKeys.filter(k => {
     if (model && k === `modelLock_${model}`) return true; // succeeded model
-    if (model && k === "modelLock___all") return true;    // account-level lock
+    if (family && k === `modelLock_${family}`) return true; // succeeded family
+    if (!isAntigravity && model && k === "modelLock___all") return true;    // account-level lock
     const expiry = conn[k];
     return expiry && new Date(expiry).getTime() <= now;   // expired
   });

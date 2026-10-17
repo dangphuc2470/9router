@@ -238,63 +238,104 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, now) 
 }
 
 /**
+ * Map Antigravity model name to its quota family ("claude_gpt" or "gemini").
+ */
+export function getAntigravityModelFamily(model) {
+  if (!model) return null;
+  const m = String(model).toLowerCase();
+  if (m.startsWith("claude") || m.startsWith("gpt")) return "claude_gpt";
+  if (m.startsWith("gemini")) return "gemini";
+  return null;
+}
+
+/**
+ * Resolve quota object for a given model, checking direct model key first,
+ * then falling back to the family's weekly or 5h session quota.
+ */
+export function getModelOrFamilyQuota(quotas, model) {
+  if (!quotas) return null;
+  // 1. Direct model key if available
+  const direct = quotas[model];
+  if (direct && typeof direct.remainingPercentage === "number") {
+    if (direct.remainingPercentage <= 0) return direct;
+  }
+  // 2. Family key (weekly / 5h session)
+  const family = getAntigravityModelFamily(model);
+  if (family) {
+    const weekly = quotas[`${family}_weekly`];
+    const session = quotas[`${family}_session`];
+
+    // Weekly limit reached (rem <= 0 or disabled)
+    if (weekly && (weekly.remainingPercentage <= 0 || weekly.disabled === true)) {
+      return weekly;
+    }
+    // 5h session limit reached
+    if (session && (session.remainingPercentage <= 0 || session.disabled === true)) {
+      return session;
+    }
+    if (weekly || session) {
+      return session || weekly;
+    }
+  }
+  return direct || null;
+}
+
+/**
  * Handle Antigravity 409/429 — refresh RAM cache and return model resetAt when exhausted.
  * Called from chat handler error path.
  * @returns {number|null} resetAt timestamp ms (for resetsAtMs passthrough) or null
  */
 export async function handleAntigravityQuotaError(connectionId, status, model, accessToken, providerSpecificData) {
-  log.info("AG_QUOTA", `${connectionId.slice(0, 8)} | ${status} on ${model} — refreshing quota`);
+  const family = getAntigravityModelFamily(model);
+  log.info("AG_QUOTA", `${connectionId.slice(0, 8)} | ${status} on ${model} (family: ${family}) — refreshing quota`);
 
   // Throttle applies to error paths too: one quota request per account/30s.
   // The first 409/429 populates cache; concurrent or repeated errors reuse it.
   const quotas = await refreshAntigravityQuota(connectionId, accessToken, providerSpecificData);
-  const quota = getAntigravityModelQuota(quotas, model);
+  const quota = getModelOrFamilyQuota(quotas, model);
 
-  // Strike breaker: count every 429 whose quota reading is either optimistic
-  // (remaining > 0) or unavailable (quota API 403/error). 3 within the window
-  // => the pair is unhealthy regardless of what the API claims; block 15m.
-  // 409 counts too by design: Antigravity signals pool exhaustion with 409 as
-  // well (see #3561 — "skip exhausted account/model quota before upstream
-  // retry" was motivated by 409/429 pairs), and poisoning by transient 409s
-  // requires 3 of them inside 60 seconds on the same pair.
-  if (!quota || quota.remainingPercentage > 0) {
-    const key = `${connectionId}|${model}`;
-    const now = Date.now();
-    const strike = strikeCounts.get(key);
-    // Fixed window anchored at the FIRST qualifying strike: three 429s must
-    // all land within 60s of that first one, not within 60s of each other.
-    const windowStart = strike && now - strike.windowStart <= STRIKE_WINDOW_MS ? strike.windowStart : now;
-    const count = strike && windowStart === strike.windowStart ? strike.count + 1 : 1;
-    strikeCounts.set(key, { count, windowStart });
-    if (count >= STRIKE_THRESHOLD) {
-      strikeCounts.delete(key);
-      const blockedUntil = now + STRIKE_BLOCK_MS;
-      const reading = quota ? `${Math.round(quota.remainingPercentage)}%` : "unknown";
-      log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | STRIKE_${status} ${model} — ${count}x 429 (quota ${reading}); CACHE_BLOCK 15m`);
-      // Synthesize a 0% entry in the shared cache so the auth pre-filter skips
-      // this pair on subsequent requests too, not just the current retry loop
-      // (the chat handler does not persist modelLock_* for this path).
+  // If quota reading confirms exhaustion (remaining <= 0 or disabled == true)
+  if (quota && (quota.remainingPercentage <= 0 || quota.disabled === true) && quota.resetAt) {
+    const resetMs = new Date(quota.resetAt).getTime();
+    if (resetMs > Date.now()) {
+      strikeCounts.delete(`${connectionId}|${model}`);
+      if (family) strikeCounts.delete(`${connectionId}|${family}`);
+      log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | UPSTREAM_${status} ${model} [${family}] — quota exhausted; CACHE_BLOCK until ${quota.resetAt}`);
+
       const cached = quotaCache.get(connectionId) || {};
-      cached[model] = { remainingPercentage: 0, resetAt: new Date(blockedUntil).toISOString() };
+      cached[model] = { remainingPercentage: 0, resetAt: quota.resetAt };
+      if (family) {
+        cached[`${family}_weekly`] = { ...cached[`${family}_weekly`], remainingPercentage: 0, resetAt: quota.resetAt };
+        cached[`${family}_session`] = { ...cached[`${family}_session`], remainingPercentage: 0, resetAt: quota.resetAt };
+      }
       quotaCache.set(connectionId, cached);
-      strikeBlocks.set(key, blockedUntil);
-      return blockedUntil;
+      return resetMs;
     }
-    return null;
   }
 
-  // Healthy-but-exhausted reading: clear strikes and use the exact resetAt.
-  strikeCounts.delete(`${connectionId}|${model}`);
-  if (!quota.resetAt) return null;
+  // Strike breaker on family/model key
+  const strikeKey = family ? `${connectionId}|${family}` : `${connectionId}|${model}`;
+  const now = Date.now();
+  const strike = strikeCounts.get(strikeKey);
+  const windowStart = strike && now - strike.windowStart <= STRIKE_WINDOW_MS ? strike.windowStart : now;
+  const count = strike && windowStart === strike.windowStart ? strike.count + 1 : 1;
+  strikeCounts.set(strikeKey, { count, windowStart });
 
-  const resetMs = new Date(quota.resetAt).getTime();
-  if (resetMs <= Date.now()) return null;
+  if (count >= STRIKE_THRESHOLD) {
+    strikeCounts.delete(strikeKey);
+    const blockedUntil = now + STRIKE_BLOCK_MS;
+    const reading = quota ? `${Math.round(quota.remainingPercentage)}%` : "unknown";
+    log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | STRIKE_${status} ${model} [${family}] — ${count}x 429 (quota ${reading}); CACHE_BLOCK 15m`);
+    const cached = quotaCache.get(connectionId) || {};
+    cached[model] = { remainingPercentage: 0, resetAt: new Date(blockedUntil).toISOString() };
+    if (family) {
+      cached[`${family}_session`] = { remainingPercentage: 0, resetAt: new Date(blockedUntil).toISOString() };
+    }
+    quotaCache.set(connectionId, cached);
+    strikeBlocks.set(strikeKey, blockedUntil);
+    return blockedUntil;
+  }
 
-  // Cache-block the requested model under its model name
-  const cached = quotaCache.get(connectionId) || {};
-  cached[model] = { remainingPercentage: 0, resetAt: quota.resetAt };
-  quotaCache.set(connectionId, cached);
-
-  log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | UPSTREAM_${status} ${model} — quota exhausted; CACHE_BLOCK until ${quota.resetAt}`);
-  return resetMs;
+  // Minimum 60s cooldown even on first 429 so account does not immediately re-fire within 2s
+  return now + 60_000;
 }
