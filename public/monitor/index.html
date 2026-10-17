@@ -566,88 +566,25 @@
       color: var(--text-tertiary);
     }
 
-    .acc-active-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      position: relative;
-      padding: 2px 7px 2px 6px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      color: var(--apple-teal);
-      background: rgba(100, 210, 255, 0.12);
-      border: 1px solid rgba(100, 210, 255, 0.28);
-      overflow: hidden;
-      user-select: none;
-      animation: active-pop-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    }
-
-    .acc-active-pill .pill-track {
-      position: absolute;
-      left: 0;
-      bottom: 0;
-      height: 2px;
-      background: var(--apple-teal);
-      opacity: 0.85;
-      border-radius: 999px;
-      transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .acc-active-pill .pill-dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background-color: var(--apple-teal);
-      animation: pulse 1.8s infinite;
-    }
-
-    .acc-active-pill .pill-count {
-      font-variant-numeric: tabular-nums;
-      font-weight: 800;
-      font-size: 9px;
-      color: var(--text-primary);
-      opacity: 0.95;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 1px 4px;
-      border-radius: 4px;
-    }
-
-    .light-theme .acc-active-pill .pill-count {
-      background: rgba(0, 0, 0, 0.07);
-    }
-
-    @keyframes active-pop-in {
-      0% { transform: scale(0.85); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
     @keyframes card-call-flash {
-      0% { background-color: rgba(100, 210, 255, 0.24); transform: scale(1.008); }
-      50% { background-color: rgba(100, 210, 255, 0.12); }
-      100% { transform: scale(1); }
+      0% {
+        background-color: var(--card-bg);
+        border-color: var(--card-border);
+      }
+      25% {
+        background-color: rgba(100, 210, 255, 0.08);
+        border-color: rgba(100, 210, 255, 0.35);
+        box-shadow: 0 0 14px rgba(100, 210, 255, 0.08);
+      }
+      100% {
+        background-color: var(--card-bg);
+        border-color: var(--card-border);
+        box-shadow: none;
+      }
     }
 
     .quota-card.just-called {
-      animation: card-call-flash 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    }
-
-    .quota-card.active {
-      background-color: var(--card-active-bg);
-      border-color: var(--card-active-border);
-      box-shadow: var(--card-active-shadow);
-      transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .quota-card.active .status-dot {
-      border-color: var(--card-active-bg);
-      animation: dot-breathe 2s infinite ease-in-out;
-    }
-
-    @keyframes dot-breathe {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.28); opacity: 0.75; }
+      animation: card-call-flash 1s cubic-bezier(0.2, 0.8, 0.3, 1) !important;
     }
 
     /* Metric Column (5H & Weekly) */
@@ -1359,7 +1296,6 @@
       <div class="usage-section">
         <div class="panel-header" style="padding-bottom: 2px;">
           <div class="panel-title">
-            <span class="material-symbols-outlined" style="font-size: 15px; color: var(--apple-teal);">query_stats</span>
             <span>Today's Token & Usage</span>
             <span class="badge-count" id="usagePeriodBadge">TODAY</span>
             <span class="badge-count" id="nodesCountBadge" style="display: none; background: rgba(48, 209, 88, 0.12); color: var(--apple-green); border: 1px solid rgba(48, 209, 88, 0.28);">2 NODES AGGREGATED</span>
@@ -1800,11 +1736,8 @@
       const container = document.getElementById("cardsList");
       document.getElementById("accountCountBadge").textContent = `${accounts.length} Accounts`;
 
-      const activeAcc = accounts.find(a => a.isActive);
-      if (activeAcc) {
-        document.getElementById("activeAccountNotice").innerHTML = 
-          `Active: <span style="color: var(--apple-teal); font-weight: 600;">${activeAcc.name}</span>`;
-      }
+      const elNotice = document.getElementById("activeAccountNotice");
+      if (elNotice) elNotice.textContent = "Auto-rotated via 9Router";
 
       if (!accounts.length) {
         container.innerHTML = `
@@ -1836,12 +1769,8 @@
         const red5 = getRedPct5h(acc.id, g5);
         const redW = getRedPctWeekly(acc.id, gw);
 
-        const isActive = acc.isActive;
-        const turnCount = Math.min(configuredStickyLimit, Math.max(1, acc.consecutiveUseCount || 1));
-        const turnPct = configuredStickyLimit > 0 ? Math.min(100, Math.round((turnCount / configuredStickyLimit) * 100)) : 100;
-
         html += `
-          <div class="quota-card ${isActive ? 'active' : ''}" data-acc-id="${acc.id}" data-acc-email="${acc.email || ''}">
+          <div class="quota-card" data-acc-id="${acc.id}" data-acc-email="${acc.email || ''}">
             <!-- Col 1: Avatar + Name -->
             <div class="acc-profile">
               <div class="avatar-wrap">
@@ -1854,14 +1783,6 @@
                 <div class="acc-name" title="${rawName}">${rawName}</div>
                 <div class="acc-tier-row">
                   <span class="acc-tier" style="${acc.isRemote ? 'color: var(--apple-teal); font-weight: 600;' : ''}">${acc.isRemote ? 'Node 2 (Remote)' : 'Antigravity'}</span>
-                  ${isActive ? `
-                    <div class="acc-active-pill" title="Turn in rotation: ${turnCount}/${configuredStickyLimit}">
-                      <span class="pill-dot"></span>
-                      <span>ACTIVE</span>
-                      ${configuredStickyLimit > 1 ? `<span class="pill-count">${turnCount}/${configuredStickyLimit}</span>` : ''}
-                      ${configuredStickyLimit > 1 ? `<div class="pill-track" style="width: ${turnPct}%;"></div>` : ''}
-                    </div>
-                  ` : ''}
                 </div>
               </div>
             </div>
@@ -2405,7 +2326,7 @@
           card.classList.add("just-called");
           setTimeout(() => {
             card.classList.remove("just-called");
-          }, 700);
+          }, 1100);
         }
       });
     }
