@@ -2026,21 +2026,22 @@
 
     // ================= Multi-Node Cluster Configuration =================
     const STORAGE_KEY_REMOTE_NODE = "9r_monitor_remote_node";
+    const DEFAULT_REMOTE_NODE = {
+      url: "http://192.168.1.222:20128",
+      apiKey: "",
+      enabled: true,
+      linkedAt: "2026-10-17T08:18:00.000Z"
+    };
 
     function getRemoteNodeConfig() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY_REMOTE_NODE);
-        if (raw) {
-          if (raw === "unlinked") return null;
-          return JSON.parse(raw);
+        if (raw && raw !== "unlinked") {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.url) return parsed;
         }
       } catch (_) {}
-      return {
-        url: "http://192.168.1.222:20128",
-        apiKey: "",
-        enabled: true,
-        linkedAt: "2026-10-17T08:18:00.000Z"
-      };
+      return DEFAULT_REMOTE_NODE;
     }
 
     function saveRemoteNodeConfig(cfg) {
@@ -2682,6 +2683,9 @@
       const backdrop = document.getElementById("clusterModalBackdrop");
       if (backdrop) backdrop.classList.remove("open");
     }
+
+    window.openClusterModal = openClusterModal;
+    window.closeClusterModal = closeClusterModal;
 
     const openClusterModalBtn = document.getElementById("openClusterModalBtn");
     const closeClusterModalBtn = document.getElementById("closeClusterModalBtn");
