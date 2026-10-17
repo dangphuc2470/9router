@@ -1050,6 +1050,217 @@
     .log-error { color: var(--apple-red); font-weight: 600; }
     .log-generic { color: var(--log-generic); }
 
+    .live-chip.cluster-chip {
+      background: rgba(100, 210, 255, 0.12);
+      border: 1px solid rgba(100, 210, 255, 0.28);
+      color: var(--apple-teal);
+      cursor: pointer;
+    }
+
+    .live-chip.cluster-chip.cluster-linked {
+      background: rgba(48, 209, 88, 0.12);
+      border-color: rgba(48, 209, 88, 0.28);
+      color: var(--apple-green);
+    }
+
+    .live-chip.cluster-chip.cluster-offline {
+      background: rgba(255, 159, 10, 0.14);
+      border-color: rgba(255, 159, 10, 0.35);
+      color: var(--apple-orange);
+    }
+
+    /* Multi-Node Cluster Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      width: 90%;
+      max-width: 490px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: scale(0.94) translateY(8px);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-backdrop.open .modal-card {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-header {
+      padding: 16px 20px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .modal-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-desc {
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .form-input {
+      background-color: var(--console-tab-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 9px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .form-input:focus {
+      border-color: var(--apple-blue);
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+    }
+
+    .form-helper {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      line-height: 1.4;
+    }
+
+    .modal-ping-status {
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-family: monospace;
+      line-height: 1.45;
+      display: none;
+    }
+    .modal-ping-status.success {
+      display: block;
+      background: rgba(48, 209, 88, 0.12);
+      border: 1px solid rgba(48, 209, 88, 0.28);
+      color: var(--apple-green);
+    }
+    .modal-ping-status.error {
+      display: block;
+      background: rgba(255, 69, 58, 0.12);
+      border: 1px solid rgba(255, 69, 58, 0.28);
+      color: var(--apple-red);
+    }
+    .modal-ping-status.info {
+      display: block;
+      background: rgba(100, 210, 255, 0.1);
+      border: 1px solid rgba(100, 210, 255, 0.25);
+      color: var(--apple-teal);
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      background-color: var(--console-tab-bg);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .btn-secondary {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-secondary:hover {
+      background-color: var(--btn-hover);
+    }
+
+    .btn-primary {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background-color: var(--apple-blue);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-danger {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 69, 58, 0.3);
+      background: rgba(255, 69, 58, 0.1);
+      color: var(--apple-red);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-danger:hover {
+      background: rgba(255, 69, 58, 0.2);
+    }
+
     .material-symbols-outlined {
       font-size: 18px;
     }
@@ -1071,6 +1282,10 @@
           <span class="dot-live dot-red" id="mitmDot"></span>
           <span id="mitmText">MITM: ...</span>
         </div>
+        <div class="live-chip cluster-chip" id="clusterChip" title="Cluster Nodes: Link another 9Router machine to aggregate usage and accounts">
+          <span class="dot-live dot-green" id="clusterDot"></span>
+          <span id="clusterText">1 Node</span>
+        </div>
       </div>
     </div>
 
@@ -1080,6 +1295,11 @@
         <span class="dot-live"></span>
         <span id="clockText">--:--:--</span>
       </div>
+
+      <!-- Cluster Link Button -->
+      <button class="action-btn action-icon-btn" id="openClusterModalBtn" title="Link Remote 9Router Machine (Multi-Node)">
+        <span class="material-symbols-outlined" style="color: var(--apple-teal);">hub</span>
+      </button>
 
       <!-- Refresh with countdown -->
       <button class="action-btn" id="refreshBtn" title="Refresh Quota Data">
@@ -1142,6 +1362,7 @@
             <span class="material-symbols-outlined" style="font-size: 15px; color: var(--apple-teal);">query_stats</span>
             <span>Today's Token & Usage</span>
             <span class="badge-count" id="usagePeriodBadge">TODAY</span>
+            <span class="badge-count" id="nodesCountBadge" style="display: none; background: rgba(48, 209, 88, 0.12); color: var(--apple-green); border: 1px solid rgba(48, 209, 88, 0.28);">2 NODES AGGREGATED</span>
           </div>
           <div style="font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 8px;">
             <span id="activeReqsNotice" style="display: none; align-items: center; gap: 4px; color: var(--apple-green); font-weight: 600;">
@@ -1632,7 +1853,7 @@
               <div class="acc-details">
                 <div class="acc-name" title="${rawName}">${rawName}</div>
                 <div class="acc-tier-row">
-                  <span class="acc-tier">Antigravity</span>
+                  <span class="acc-tier" style="${acc.isRemote ? 'color: var(--apple-teal); font-weight: 600;' : ''}">${acc.isRemote ? 'Node 2 (Remote)' : 'Antigravity'}</span>
                   ${isActive ? `
                     <div class="acc-active-pill" title="Turn in rotation: ${turnCount}/${configuredStickyLimit}">
                       <span class="pill-dot"></span>
@@ -1738,6 +1959,57 @@
         });
 
         const results = await Promise.all(promises);
+
+        // Fetch remote accounts if multi-node configured
+        const remoteCfg = getRemoteNodeConfig();
+        if (remoteCfg && remoteCfg.url && remoteCfg.enabled !== false) {
+          try {
+            const rData = await fetchRemoteData("/api/providers/client?pageSize=50", remoteCfg, 3500);
+            if (rData && Array.isArray(rData.connections)) {
+              const localEmails = new Set(results.map(r => (r.email || "").toLowerCase().trim()));
+              const rConns = rData.connections.filter(c => c.provider === "antigravity" && c.isActive !== false);
+
+              const rPromises = rConns.map(async (conn) => {
+                const rawName = conn.name || conn.email || "Account";
+                const cEmail = (conn.email || rawName).toLowerCase().trim();
+                if (localEmails.has(cEmail)) return null;
+
+                let g5Pct = 0, g5Reset = "", gwPct = 0, gwReset = "";
+                try {
+                  const q = await fetchRemoteData(`/api/usage/${conn.id}`, remoteCfg, 2500);
+                  if (q && q.quotas) {
+                    if (q.quotas.gemini_session) {
+                      g5Pct = Math.round(q.quotas.gemini_session.remainingPercentage || 0);
+                      g5Reset = formatResetTime(q.quotas.gemini_session.resetAt);
+                    }
+                    if (q.quotas.gemini_weekly) {
+                      gwPct = Math.round(q.quotas.gemini_weekly.remainingPercentage || 0);
+                      gwReset = formatResetTime(q.quotas.gemini_weekly.resetAt);
+                    }
+                  }
+                } catch (_) {}
+
+                return {
+                  id: "remote_" + conn.id,
+                  name: rawName.split("@")[0],
+                  email: conn.email || rawName,
+                  priority: (conn.priority ?? 99) + 20,
+                  lastUsedAt: conn.lastUsedAt || "",
+                  consecutiveUseCount: conn.consecutiveUseCount || 0,
+                  testStatus: conn.testStatus || "active",
+                  isConnActive: conn.isActive !== false,
+                  isRemote: true,
+                  gemini_5h: { pct: g5Pct, reset: g5Reset },
+                  gemini_weekly: { pct: gwPct, reset: gwReset }
+                };
+              });
+
+              const rResults = (await Promise.all(rPromises)).filter(Boolean);
+              results.push(...rResults);
+            }
+          } catch (_) {}
+        }
+
         results.sort((a, b) => a.priority - b.priority);
 
         // Smart active account detection matching 9Router rotation:
@@ -1786,6 +2058,118 @@
       }
     }
 
+    // ================= Multi-Node Cluster Configuration =================
+    const STORAGE_KEY_REMOTE_NODE = "9r_monitor_remote_node";
+
+    function getRemoteNodeConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_REMOTE_NODE);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function saveRemoteNodeConfig(cfg) {
+      try {
+        if (!cfg) {
+          localStorage.removeItem(STORAGE_KEY_REMOTE_NODE);
+        } else {
+          localStorage.setItem(STORAGE_KEY_REMOTE_NODE, JSON.stringify(cfg));
+        }
+      } catch (_) {}
+    }
+
+    function normalizeNodeUrl(input) {
+      if (!input) return "";
+      let s = input.trim();
+      if (!/^https?:\/\//i.test(s)) {
+        s = "http://" + s;
+      }
+      try {
+        const u = new URL(s);
+        if (!u.port) {
+          u.port = "20128";
+        }
+        return u.origin;
+      } catch (_) {
+        return s.replace(/\/+$/, "");
+      }
+    }
+
+    async function fetchRemoteData(endpointPath, remoteCfg, timeoutMs = 4500) {
+      if (!remoteCfg || !remoteCfg.url || remoteCfg.enabled === false) return null;
+      const targetUrl = `${remoteCfg.url}${endpointPath}`;
+      const headers = {};
+      if (remoteCfg.apiKey) {
+        headers["Authorization"] = `Bearer ${remoteCfg.apiKey}`;
+        headers["x-api-key"] = remoteCfg.apiKey;
+      }
+
+      // Try 1: Direct fetch
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await fetch(targetUrl, {
+          headers,
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        clearTimeout(t);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (_) {}
+
+      // Try 2: Local proxy fallback
+      try {
+        const proxyUrl = `/api/monitor/proxy?url=${encodeURIComponent(targetUrl)}`;
+        const proxyHeaders = {};
+        if (remoteCfg.apiKey) {
+          proxyHeaders["x-target-api-key"] = remoteCfg.apiKey;
+        }
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), timeoutMs + 1000);
+        const pRes = await fetch(proxyUrl, {
+          headers: proxyHeaders,
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        clearTimeout(t);
+        if (pRes.ok) {
+          return await pRes.json();
+        }
+      } catch (_) {}
+
+      return null;
+    }
+
+    function updateClusterChip(state) {
+      const chip = document.getElementById("clusterChip");
+      const dot = document.getElementById("clusterDot");
+      const text = document.getElementById("clusterText");
+      if (!chip || !dot || !text) return;
+
+      chip.classList.remove("cluster-linked", "cluster-offline");
+
+      if (state === "linked") {
+        chip.classList.add("cluster-linked");
+        dot.className = "dot-live";
+        text.textContent = "2 Nodes Linked";
+        chip.title = "Cluster: Local + Remote 9Router aggregated. Click to configure.";
+      } else if (state === "offline") {
+        chip.classList.add("cluster-offline");
+        dot.className = "dot-live dot-orange";
+        text.textContent = "Remote Offline";
+        chip.title = "Remote 9Router is unreachable. Showing Local stats. Click to configure.";
+      } else {
+        dot.className = "dot-live dot-green";
+        text.textContent = "1 Node";
+        chip.title = "Single Node: Click to link a secondary 9Router machine.";
+      }
+    }
+
     // ================= Today's Token & Usage Stats =================
     function fmtTokens(n) {
       if (!n || n <= 0) return "0";
@@ -1801,28 +2185,62 @@
 
     async function fetchUsageStats() {
       try {
-        const res = await fetch("/api/usage/stats?period=today");
-        if (!res.ok) return;
-        const data = await res.json();
+        const remoteCfg = getRemoteNodeConfig();
+        const promises = [
+          fetch("/api/usage/stats?period=today")
+            .then(r => r.ok ? r.json() : null)
+            .catch(() => null)
+        ];
+
+        if (remoteCfg && remoteCfg.url && remoteCfg.enabled !== false) {
+          promises.push(
+            fetchRemoteData("/api/usage/stats?period=today", remoteCfg)
+          );
+        }
+
+        const [localData, remoteData] = await Promise.all(promises);
+
+        // Update cluster chip status
+        if (remoteCfg && remoteCfg.url && remoteCfg.enabled !== false) {
+          if (remoteData) {
+            updateClusterChip("linked");
+          } else {
+            updateClusterChip("offline");
+          }
+        } else {
+          updateClusterChip("single");
+        }
+
+        if (!localData && !remoteData) return;
 
         // 1. Total Requests & Cost
-        const totalReqs = data.totalRequests || 0;
-        const totalCost = data.totalCost || 0;
+        const totalReqs = (localData?.totalRequests || 0) + (remoteData?.totalRequests || 0);
+        const totalCost = (localData?.totalCost || 0) + (remoteData?.totalCost || 0);
         const elReqs = document.getElementById("statRequests");
-        if (elReqs) elReqs.textContent = totalReqs.toLocaleString();
+        if (elReqs) {
+          elReqs.textContent = totalReqs.toLocaleString();
+          if (remoteData) {
+            elReqs.title = `Local: ${(localData?.totalRequests || 0).toLocaleString()} | Remote: ${(remoteData?.totalRequests || 0).toLocaleString()}`;
+          } else {
+            elReqs.title = `${totalReqs.toLocaleString()} requests`;
+          }
+        }
+
         const elCost = document.getElementById("statCost");
-        if (elCost) elCost.textContent = `Est. Cost: ~${fmtCost(totalCost)}`;
+        if (elCost) {
+          elCost.textContent = `Est. Cost: ~${fmtCost(totalCost)}${remoteData ? " (Combined)" : ""}`;
+        }
 
         // 2. Input Tokens
-        const promptTokens = data.totalPromptTokens || 0;
+        const promptTokens = (localData?.totalPromptTokens || 0) + (remoteData?.totalPromptTokens || 0);
         const elInput = document.getElementById("statInput");
         if (elInput) {
           elInput.textContent = fmtTokens(promptTokens);
-          elInput.title = promptTokens.toLocaleString() + " tokens";
+          elInput.title = promptTokens.toLocaleString() + " tokens" + (remoteData ? ` (Local: ${(localData?.totalPromptTokens || 0).toLocaleString()} + Remote: ${(remoteData?.totalPromptTokens || 0).toLocaleString()})` : "");
         }
 
         // 3. Cached Tokens
-        const cachedTokens = data.totalCachedTokens || 0;
+        const cachedTokens = (localData?.totalCachedTokens || 0) + (remoteData?.totalCachedTokens || 0);
         const elCached = document.getElementById("statCached");
         if (elCached) {
           elCached.textContent = fmtTokens(cachedTokens);
@@ -1833,33 +2251,65 @@
         if (elRate) elRate.textContent = `${cacheRate}% hit rate`;
 
         // 4. Output Tokens
-        const compTokens = data.totalCompletionTokens || 0;
+        const compTokens = (localData?.totalCompletionTokens || 0) + (remoteData?.totalCompletionTokens || 0);
         const elOutput = document.getElementById("statOutput");
         if (elOutput) {
           elOutput.textContent = fmtTokens(compTokens);
-          elOutput.title = compTokens.toLocaleString() + " tokens";
+          elOutput.title = compTokens.toLocaleString() + " tokens" + (remoteData ? ` (Local: ${(localData?.totalCompletionTokens || 0).toLocaleString()} + Remote: ${(remoteData?.totalCompletionTokens || 0).toLocaleString()})` : "");
+        }
+
+        // Nodes Badge in Usage Section
+        const elNodesBadge = document.getElementById("nodesCountBadge");
+        if (elNodesBadge) {
+          if (remoteData) {
+            elNodesBadge.style.display = "inline-flex";
+            elNodesBadge.textContent = "2 NODES AGGREGATED";
+          } else {
+            elNodesBadge.style.display = "none";
+          }
         }
 
         // 5. Last updated timestamp
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
         const elUpdated = document.getElementById("usageLastUpdated");
-        if (elUpdated) elUpdated.textContent = `Updated ${timeStr}`;
+        if (elUpdated) {
+          elUpdated.textContent = `Updated ${timeStr}${remoteData ? " (2 Nodes)" : ""}`;
+        }
 
-        // 6. Model Activity Breakdown
-        const byModel = data.byModel || {};
-        const modelEntries = Object.entries(byModel).map(([key, val]) => {
-          const mTokens = (val.promptTokens || 0) + (val.completionTokens || 0);
-          return {
-            name: val.rawModel || key.split(" ")[0] || key,
-            provider: val.provider || "",
-            requests: val.requests || 0,
-            tokens: mTokens,
-            cost: val.cost || 0
-          };
-        });
+        // 6. Model Activity Breakdown (Merged across instances)
+        const mergedModels = {};
+        const mergeDict = (byModel, nodeLabel) => {
+          if (!byModel) return;
+          for (const [key, val] of Object.entries(byModel)) {
+            const rawName = val.rawModel || key.split(" ")[0] || key;
+            if (!mergedModels[rawName]) {
+              mergedModels[rawName] = {
+                name: rawName,
+                provider: val.provider || "",
+                requests: 0,
+                tokens: 0,
+                cost: 0,
+                nodes: new Set()
+              };
+            }
+            const mTokens = (val.promptTokens || 0) + (val.completionTokens || 0);
+            mergedModels[rawName].requests += (val.requests || 0);
+            mergedModels[rawName].tokens += mTokens;
+            mergedModels[rawName].cost += (val.cost || 0);
+            mergedModels[rawName].nodes.add(nodeLabel);
+            if (!mergedModels[rawName].provider && val.provider) {
+              mergedModels[rawName].provider = val.provider;
+            }
+          }
+        };
 
+        mergeDict(localData?.byModel, "local");
+        if (remoteData?.byModel) mergeDict(remoteData.byModel, "remote");
+
+        const modelEntries = Object.values(mergedModels);
         modelEntries.sort((a, b) => b.tokens - a.tokens);
+
         const elCount = document.getElementById("breakdownModelCount");
         if (elCount) elCount.textContent = `${modelEntries.length} models`;
 
@@ -1877,12 +2327,14 @@
 
             breakdownList.innerHTML = topModels.map(m => {
               const pct = Math.min(100, Math.max(4, Math.round((m.tokens / maxTokens) * 100)));
+              const nodeBadge = m.nodes.size > 1 ? '<span style="font-size: 9px; padding: 1px 4px; border-radius: 3px; background: rgba(48,209,88,0.15); color: var(--apple-green); margin-left: 4px;">Both Nodes</span>' : '';
               return `
                 <div class="breakdown-row">
                   <div class="breakdown-row-meta">
                     <span class="breakdown-model-name" title="${m.name} (${m.provider})">
                       ${m.name}
                       <span style="font-size: 10px; color: var(--text-tertiary); font-weight: 400; margin-left: 4px;">(${m.provider || "ag"})</span>
+                      ${nodeBadge}
                     </span>
                     <span class="breakdown-stats">
                       <strong>${fmtTokens(m.tokens)}</strong> tok • <span>${m.requests} reqs</span>
@@ -2225,6 +2677,182 @@
         console.error(e);
       }
     });
+
+    // ================= Cluster Link Modal Logic =================
+    const clusterModalBackdrop = document.getElementById("clusterModalBackdrop");
+    const openClusterModalBtn = document.getElementById("openClusterModalBtn");
+    const closeClusterModalBtn = document.getElementById("closeClusterModalBtn");
+    const clusterChipBtn = document.getElementById("clusterChip");
+    const remoteNodeIpInput = document.getElementById("remoteNodeIpInput");
+    const remoteNodeKeyInput = document.getElementById("remoteNodeKeyInput");
+    const clusterPingStatus = document.getElementById("clusterPingStatus");
+    const clusterTestBtn = document.getElementById("clusterTestBtn");
+    const clusterSaveBtn = document.getElementById("clusterSaveBtn");
+    const clusterDisconnectBtn = document.getElementById("clusterDisconnectBtn");
+
+    function openClusterModal() {
+      const cfg = getRemoteNodeConfig();
+      if (cfg && cfg.url) {
+        remoteNodeIpInput.value = cfg.url.replace(/^https?:\/\//i, "");
+        remoteNodeKeyInput.value = cfg.apiKey || "";
+        clusterDisconnectBtn.style.display = "inline-block";
+      } else {
+        remoteNodeIpInput.value = "";
+        remoteNodeKeyInput.value = "";
+        clusterDisconnectBtn.style.display = "none";
+      }
+      clusterPingStatus.className = "modal-ping-status";
+      clusterPingStatus.style.display = "none";
+      clusterPingStatus.textContent = "";
+      clusterModalBackdrop.classList.add("open");
+      remoteNodeIpInput.focus();
+    }
+
+    function closeClusterModal() {
+      clusterModalBackdrop.classList.remove("open");
+    }
+
+    if (openClusterModalBtn) openClusterModalBtn.addEventListener("click", openClusterModal);
+    if (clusterChipBtn) clusterChipBtn.addEventListener("click", openClusterModal);
+    if (closeClusterModalBtn) closeClusterModalBtn.addEventListener("click", closeClusterModal);
+
+    clusterModalBackdrop.addEventListener("click", (e) => {
+      if (e.target === clusterModalBackdrop) closeClusterModal();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && clusterModalBackdrop.classList.contains("open")) {
+        closeClusterModal();
+      }
+    });
+
+    // Test Ping to Remote Node
+    if (clusterTestBtn) {
+      clusterTestBtn.addEventListener("click", async () => {
+        const rawInput = remoteNodeIpInput.value.trim();
+        if (!rawInput) {
+          clusterPingStatus.className = "modal-ping-status error";
+          clusterPingStatus.textContent = "Please enter an IP address or hostname first.";
+          return;
+        }
+
+        const normalizedUrl = normalizeNodeUrl(rawInput);
+        const apiKey = remoteNodeKeyInput.value.trim();
+
+        clusterPingStatus.className = "modal-ping-status info";
+        clusterPingStatus.textContent = `Pinging ${normalizedUrl}...`;
+
+        const startTime = performance.now();
+        const testCfg = { url: normalizedUrl, apiKey, enabled: true };
+        const data = await fetchRemoteData("/api/usage/stats?period=today", testCfg, 5000);
+        const latency = Math.round(performance.now() - startTime);
+
+        if (data && (data.totalRequests !== undefined || data.models || data.byModel)) {
+          const reqs = (data.totalRequests || 0).toLocaleString();
+          clusterPingStatus.className = "modal-ping-status success";
+          clusterPingStatus.textContent = `Connected (${latency}ms) - Found ${reqs} requests today on remote machine.`;
+        } else {
+          clusterPingStatus.className = "modal-ping-status error";
+          clusterPingStatus.textContent = `Cannot reach instance at ${normalizedUrl} (${latency}ms). Check IP, port (20128), and network connection.`;
+        }
+      });
+    }
+
+    // Save and Link
+    if (clusterSaveBtn) {
+      clusterSaveBtn.addEventListener("click", async () => {
+        const rawInput = remoteNodeIpInput.value.trim();
+        if (!rawInput) {
+          clusterPingStatus.className = "modal-ping-status error";
+          clusterPingStatus.textContent = "Please enter an IP address.";
+          return;
+        }
+
+        const normalizedUrl = normalizeNodeUrl(rawInput);
+        const apiKey = remoteNodeKeyInput.value.trim();
+
+        const cfg = {
+          url: normalizedUrl,
+          apiKey,
+          enabled: true,
+          linkedAt: new Date().toISOString()
+        };
+
+        saveRemoteNodeConfig(cfg);
+        closeClusterModal();
+
+        // Immediate trigger
+        updateClusterChip("linked");
+        await fetchUsageStats();
+        await fetchQuotaData();
+      });
+    }
+
+    // Disconnect / Reset to Single Node
+    if (clusterDisconnectBtn) {
+      clusterDisconnectBtn.addEventListener("click", async () => {
+        saveRemoteNodeConfig(null);
+        closeClusterModal();
+        updateClusterChip("single");
+        await fetchUsageStats();
+        await fetchQuotaData();
+      });
+    }
+
+    // Initialize Cluster Chip state on page load
+    (function initClusterState() {
+      const cfg = getRemoteNodeConfig();
+      if (cfg && cfg.url && cfg.enabled !== false) {
+        updateClusterChip("linked");
+      } else {
+        updateClusterChip("single");
+      }
+    })();
   </script>
+
+  <!-- Multi-Node Cluster Modal: Link Remote 9Router Instance -->
+  <div class="modal-backdrop" id="clusterModalBackdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="material-symbols-outlined" style="color: var(--apple-teal); font-size: 20px;">hub</span>
+          <span class="modal-title">Link Remote 9Router Machine</span>
+        </div>
+        <button class="panel-icon-btn" id="closeClusterModalBtn" title="Close">
+          <span class="material-symbols-outlined" style="font-size: 18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-desc">
+          Enter the IP address of your secondary machine running 9Router. This monitor will aggregate requests, input/output tokens, estimated cost, and active accounts across both instances in real time.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="remoteNodeIpInput">Secondary 9Router Address (LAN IP:Port)</label>
+          <input type="text" class="form-input" id="remoteNodeIpInput" placeholder="e.g. 192.168.1.146:20128" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <span class="form-helper">Enter LAN IP (e.g. 192.168.1.50:20128). Port defaults to 20128 if not specified.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="remoteNodeKeyInput">Remote API Key (Optional)</label>
+          <input type="password" class="form-input" id="remoteNodeKeyInput" placeholder="Leave blank if requireApiKey is off" autocomplete="off">
+          <span class="form-helper">Only needed if your secondary machine has requireApiKey or remote auth enabled.</span>
+        </div>
+
+        <div class="modal-ping-status" id="clusterPingStatus"></div>
+      </div>
+
+      <div class="modal-footer">
+        <div>
+          <button type="button" class="btn-danger" id="clusterDisconnectBtn" style="display: none;">Unlink Remote</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn-secondary" id="clusterTestBtn">Test Ping</button>
+          <button type="button" class="btn-primary" id="clusterSaveBtn">Save & Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

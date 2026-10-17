@@ -113,6 +113,47 @@ http.createServer = (...args) => {
         return;
       }
     }
+    if (rawUrl.startsWith("/api/monitor/proxy")) {
+      const u = new URL(rawUrl, "http://127.0.0.1:20128");
+      const targetUrl = u.searchParams.get("url");
+      if (!targetUrl) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "Missing url parameter" }));
+        return;
+      }
+      try {
+        const parsedTarget = new URL(targetUrl);
+        const mod = parsedTarget.protocol === "https:" ? require("https") : require("http");
+        const headers = {};
+        const key = req.headers["x-target-api-key"] || req.headers["x-api-key"] || u.searchParams.get("key");
+        if (key) {
+          headers["Authorization"] = "Bearer " + key;
+          headers["x-api-key"] = key;
+        }
+        const preq = mod.request(targetUrl, { method: "GET", headers, timeout: 6000 }, (pres) => {
+          res.writeHead(pres.statusCode || 200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+          });
+          pres.pipe(res);
+        });
+        preq.on("timeout", () => {
+          preq.destroy();
+          res.writeHead(504, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "Connection to remote machine timed out" }));
+        });
+        preq.on("error", (err) => {
+          res.writeHead(502, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: err.message || "Failed to reach remote instance" }));
+        });
+        preq.end();
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "Invalid target URL" }));
+      }
+      return;
+    }
     const socketIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "";
     const xff = req.headers["x-forwarded-for"];
     const xRealIp = req.headers["x-real-ip"];
