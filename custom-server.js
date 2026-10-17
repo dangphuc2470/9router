@@ -47,6 +47,45 @@ function startBackgroundTokenRefreshFromCustomServer() {
     });
 }
 
+function getQuickMitmStatus() {
+  let running = false;
+  let pid = null;
+  const pidFile = path.join(os.homedir(), ".9router", "mitm", ".mitm.pid");
+  try {
+    if (fs.existsSync(pidFile)) {
+      const p = parseInt(fs.readFileSync(pidFile, "utf8").trim(), 10);
+      if (p && !isNaN(p)) {
+        try {
+          process.kill(p, 0);
+          running = true;
+          pid = p;
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  let dnsAntigravity = false;
+  try {
+    const hostsFile = process.platform === "win32"
+      ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "drivers", "etc", "hosts")
+      : "/etc/hosts";
+    if (fs.existsSync(hostsFile)) {
+      const content = fs.readFileSync(hostsFile, "utf8");
+      dnsAntigravity = content.includes("cloudcode-pa.googleapis.com") || content.includes("daily-cloudcode-pa.googleapis.com");
+    }
+  } catch (_) {}
+
+  return {
+    running,
+    pid,
+    certExists: true,
+    certTrusted: true,
+    dnsStatus: {
+      antigravity: dnsAntigravity
+    }
+  };
+}
+
 // Wrap Next standalone HTTP server: derive client IP from the TCP socket
 // (unspoofable) and strip client-supplied forwarding headers so downstream
 // rate-limiting keys on the real peer address instead of attacker-controlled XFF.
@@ -115,6 +154,31 @@ http.createServer = (...args) => {
             res.end(JSON.stringify({ error: e && e.message ? e.message : "Invalid JSON" }));
           }
         });
+        return;
+      }
+    }
+    if (
+      (rawUrl === "/api/cli-tools/antigravity-mitm" ||
+       rawUrl.startsWith("/api/cli-tools/antigravity-mitm?") ||
+       rawUrl === "/api/monitor/mitm-status" ||
+       rawUrl.startsWith("/api/monitor/mitm-status?"))
+    ) {
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "*",
+        });
+        res.end();
+        return;
+      }
+      if (req.method === "GET") {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-store",
+        });
+        res.end(JSON.stringify(getQuickMitmStatus()));
         return;
       }
     }

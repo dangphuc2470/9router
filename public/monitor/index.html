@@ -2417,8 +2417,11 @@
       if (!chip || !dot || !text) return;
 
       try {
-        const res = await fetch("/api/cli-tools/antigravity-mitm");
-        if (!res.ok) throw new Error("HTTP " + res.status);
+        let res = await fetch("/api/cli-tools/antigravity-mitm").catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetch("/api/monitor/mitm-status").catch(() => null);
+        }
+        if (!res || !res.ok) throw new Error("Cannot fetch MITM status");
         const data = await res.json();
 
         const isRunning = data && data.running === true;
