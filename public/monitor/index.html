@@ -1219,7 +1219,7 @@
           <span class="dot-live dot-red" id="mitmDot"></span>
           <span id="mitmText">MITM: ...</span>
         </div>
-        <div class="live-chip cluster-chip" id="clusterChip" title="Cluster Nodes: Link another 9Router machine to aggregate usage and accounts">
+        <div class="live-chip cluster-chip" id="clusterChip" role="button" tabindex="0" onclick="openClusterModal()" title="Cluster Nodes: Link another 9Router machine to aggregate usage and accounts">
           <span class="dot-live dot-green" id="clusterDot"></span>
           <span id="clusterText">1 Node</span>
         </div>
@@ -1234,7 +1234,7 @@
       </div>
 
       <!-- Cluster Link Button -->
-      <button class="action-btn action-icon-btn" id="openClusterModalBtn" title="Link Remote 9Router Machine (Multi-Node)">
+      <button class="action-btn action-icon-btn" id="openClusterModalBtn" onclick="openClusterModal()" title="Link Remote 9Router Machine (Multi-Node)">
         <span class="material-symbols-outlined" style="color: var(--apple-teal);">hub</span>
       </button>
 
@@ -1385,6 +1385,51 @@
       </div>
     </section>
   </main>
+
+  <!-- Multi-Node Cluster Modal: Link Remote 9Router Instance -->
+  <div class="modal-backdrop" id="clusterModalBackdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="material-symbols-outlined" style="color: var(--apple-teal); font-size: 20px;">hub</span>
+          <span class="modal-title">Link Remote 9Router Machine</span>
+        </div>
+        <button class="panel-icon-btn" id="closeClusterModalBtn" title="Close">
+          <span class="material-symbols-outlined" style="font-size: 18px;">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-desc">
+          Enter the IP address of your secondary machine running 9Router. This monitor will aggregate requests, input/output tokens, estimated cost, and active accounts across both instances in real time.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="remoteNodeIpInput">Secondary 9Router Address (LAN IP:Port)</label>
+          <input type="text" class="form-input" id="remoteNodeIpInput" placeholder="e.g. 192.168.1.146:20128" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <span class="form-helper">Enter LAN IP (e.g. 192.168.1.50:20128). Port defaults to 20128 if not specified.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="remoteNodeKeyInput">Remote API Key (Optional)</label>
+          <input type="password" class="form-input" id="remoteNodeKeyInput" placeholder="Leave blank if requireApiKey is off" autocomplete="off">
+          <span class="form-helper">Only needed if your secondary machine has requireApiKey or remote auth enabled.</span>
+        </div>
+
+        <div class="modal-ping-status" id="clusterPingStatus"></div>
+      </div>
+
+      <div class="modal-footer">
+        <div>
+          <button type="button" class="btn-danger" id="clusterDisconnectBtn" style="display: none;">Unlink Remote</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn-secondary" id="clusterTestBtn">Test Ping</button>
+          <button type="button" class="btn-primary" id="clusterSaveBtn">Save & Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     // Constants matching Turing Quota Monitor
@@ -2600,10 +2645,42 @@
     });
 
     // ================= Cluster Link Modal Logic =================
-    const clusterModalBackdrop = document.getElementById("clusterModalBackdrop");
+    function openClusterModal() {
+      const backdrop = document.getElementById("clusterModalBackdrop");
+      const ipInput = document.getElementById("remoteNodeIpInput");
+      const keyInput = document.getElementById("remoteNodeKeyInput");
+      const disconnectBtn = document.getElementById("clusterDisconnectBtn");
+      const pingStatus = document.getElementById("clusterPingStatus");
+      if (!backdrop) return;
+
+      const cfg = getRemoteNodeConfig();
+      if (cfg && cfg.url) {
+        if (ipInput) ipInput.value = cfg.url.replace(/^https?:\/\//i, "");
+        if (keyInput) keyInput.value = cfg.apiKey || "";
+        if (disconnectBtn) disconnectBtn.style.display = "inline-block";
+      } else {
+        if (ipInput) ipInput.value = "";
+        if (keyInput) keyInput.value = "";
+        if (disconnectBtn) disconnectBtn.style.display = "none";
+      }
+      if (pingStatus) {
+        pingStatus.className = "modal-ping-status";
+        pingStatus.style.display = "none";
+        pingStatus.textContent = "";
+      }
+      backdrop.classList.add("open");
+      if (ipInput) setTimeout(() => ipInput.focus(), 80);
+    }
+
+    function closeClusterModal() {
+      const backdrop = document.getElementById("clusterModalBackdrop");
+      if (backdrop) backdrop.classList.remove("open");
+    }
+
     const openClusterModalBtn = document.getElementById("openClusterModalBtn");
     const closeClusterModalBtn = document.getElementById("closeClusterModalBtn");
     const clusterChipBtn = document.getElementById("clusterChip");
+    const clusterModalBackdrop = document.getElementById("clusterModalBackdrop");
     const remoteNodeIpInput = document.getElementById("remoteNodeIpInput");
     const remoteNodeKeyInput = document.getElementById("remoteNodeKeyInput");
     const clusterPingStatus = document.getElementById("clusterPingStatus");
@@ -2611,38 +2688,26 @@
     const clusterSaveBtn = document.getElementById("clusterSaveBtn");
     const clusterDisconnectBtn = document.getElementById("clusterDisconnectBtn");
 
-    function openClusterModal() {
-      const cfg = getRemoteNodeConfig();
-      if (cfg && cfg.url) {
-        remoteNodeIpInput.value = cfg.url.replace(/^https?:\/\//i, "");
-        remoteNodeKeyInput.value = cfg.apiKey || "";
-        clusterDisconnectBtn.style.display = "inline-block";
-      } else {
-        remoteNodeIpInput.value = "";
-        remoteNodeKeyInput.value = "";
-        clusterDisconnectBtn.style.display = "none";
-      }
-      clusterPingStatus.className = "modal-ping-status";
-      clusterPingStatus.style.display = "none";
-      clusterPingStatus.textContent = "";
-      clusterModalBackdrop.classList.add("open");
-      remoteNodeIpInput.focus();
+    if (openClusterModalBtn) {
+      openClusterModalBtn.onclick = openClusterModal;
+    }
+    if (clusterChipBtn) {
+      clusterChipBtn.onclick = openClusterModal;
+      clusterChipBtn.style.cursor = "pointer";
+    }
+    if (closeClusterModalBtn) {
+      closeClusterModalBtn.onclick = closeClusterModal;
     }
 
-    function closeClusterModal() {
-      clusterModalBackdrop.classList.remove("open");
+    if (clusterModalBackdrop) {
+      clusterModalBackdrop.onclick = (e) => {
+        if (e.target === clusterModalBackdrop) closeClusterModal();
+      };
     }
-
-    if (openClusterModalBtn) openClusterModalBtn.addEventListener("click", openClusterModal);
-    if (clusterChipBtn) clusterChipBtn.addEventListener("click", openClusterModal);
-    if (closeClusterModalBtn) closeClusterModalBtn.addEventListener("click", closeClusterModal);
-
-    clusterModalBackdrop.addEventListener("click", (e) => {
-      if (e.target === clusterModalBackdrop) closeClusterModal();
-    });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && clusterModalBackdrop.classList.contains("open")) {
+      const backdrop = document.getElementById("clusterModalBackdrop");
+      if (e.key === "Escape" && backdrop && backdrop.classList.contains("open")) {
         closeClusterModal();
       }
     });
@@ -2730,50 +2795,5 @@
       }
     })();
   </script>
-
-  <!-- Multi-Node Cluster Modal: Link Remote 9Router Instance -->
-  <div class="modal-backdrop" id="clusterModalBackdrop">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <span class="material-symbols-outlined" style="color: var(--apple-teal); font-size: 20px;">hub</span>
-          <span class="modal-title">Link Remote 9Router Machine</span>
-        </div>
-        <button class="panel-icon-btn" id="closeClusterModalBtn" title="Close">
-          <span class="material-symbols-outlined" style="font-size: 18px;">close</span>
-        </button>
-      </div>
-
-      <div class="modal-body">
-        <div class="modal-desc">
-          Enter the IP address of your secondary machine running 9Router. This monitor will aggregate requests, input/output tokens, estimated cost, and active accounts across both instances in real time.
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="remoteNodeIpInput">Secondary 9Router Address (LAN IP:Port)</label>
-          <input type="text" class="form-input" id="remoteNodeIpInput" placeholder="e.g. 192.168.1.146:20128" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-          <span class="form-helper">Enter LAN IP (e.g. 192.168.1.50:20128). Port defaults to 20128 if not specified.</span>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="remoteNodeKeyInput">Remote API Key (Optional)</label>
-          <input type="password" class="form-input" id="remoteNodeKeyInput" placeholder="Leave blank if requireApiKey is off" autocomplete="off">
-          <span class="form-helper">Only needed if your secondary machine has requireApiKey or remote auth enabled.</span>
-        </div>
-
-        <div class="modal-ping-status" id="clusterPingStatus"></div>
-      </div>
-
-      <div class="modal-footer">
-        <div>
-          <button type="button" class="btn-danger" id="clusterDisconnectBtn" style="display: none;">Unlink Remote</button>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn-secondary" id="clusterTestBtn">Test Ping</button>
-          <button type="button" class="btn-primary" id="clusterSaveBtn">Save & Link</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
