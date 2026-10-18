@@ -405,8 +405,16 @@ async function scheduleMitmRestart(apiKey) {
   // from passing the check above.
   mitmIsRestarting = true;
 
-  const aliveMs = Date.now() - mitmLastStartTime;
-  if (aliveMs >= MITM_RESTART_RESET_MS) mitmRestartCount = 0;
+  if (serverProcess && !serverProcess.killed) {
+    mitmRestartCount = 0;
+    mitmIsRestarting = false;
+    return;
+  }
+
+  if (mitmRestartCount === 0) {
+    const aliveMs = Date.now() - mitmLastStartTime;
+    if (aliveMs >= MITM_RESTART_RESET_MS) mitmRestartCount = 0;
+  }
 
   if (mitmRestartCount >= MITM_MAX_RESTARTS) {
     err("Max restart attempts reached. Giving up.");
@@ -439,6 +447,12 @@ async function scheduleMitmRestart(apiKey) {
     mitmRestartCount = 0;
     mitmIsRestarting = false;
   } catch (e) {
+    if (e.message && e.message.includes("already running")) {
+      log("MITM server is already running, stopping auto-restart");
+      mitmRestartCount = 0;
+      mitmIsRestarting = false;
+      return;
+    }
     err(`Restart attempt ${mitmRestartCount}/${MITM_MAX_RESTARTS} failed: ${e.message}`);
     mitmIsRestarting = false;
     // Schedule next retry
@@ -487,7 +501,7 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
   }
 
   if (serverProcess && !serverProcess.killed) {
-    throw new Error("MITM server is already running");
+    return { running: true, pid: serverPid || serverProcess.pid };
   }
 
   // Atomically claim lock to prevent concurrent startServer across processes.
