@@ -287,7 +287,37 @@ async function createBypassRequest(parsedUrl, realIP, options) {
 
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
+    let activeReq = null;
     let settled = false;
+
+    const createAbortError = () => {
+      const reason = options?.signal?.reason;
+      const err = new Error(reason?.message || "The operation was aborted");
+      err.name = "AbortError";
+      return err;
+    };
+
+    const onAbort = () => {
+      const abortErr = createAbortError();
+      if (!settled) {
+        settled = true;
+        reject(abortErr);
+      }
+      if (activeReq) activeReq.destroy(abortErr);
+      socket.destroy(abortErr);
+    };
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        socket.destroy();
+        return reject(createAbortError());
+      }
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    socket.on("close", () => {
+      options?.signal?.removeEventListener?.("abort", onAbort);
+    });
 
     const cleanupAndReject = (err) => {
       DNS_CACHE.delete(parsedUrl.hostname);
@@ -325,21 +355,34 @@ async function createBypassRequest(parsedUrl, realIP, options) {
         if (!settled) {
           settled = true;
         }
+        let webBody = null;
+        let bodyTextPromise = null;
+        const readText = () => {
+          if (!bodyTextPromise) {
+            bodyTextPromise = (async () => {
+              const chunks = [];
+              for await (const chunk of res) chunks.push(chunk);
+              return Buffer.concat(chunks).toString();
+            })();
+          }
+          return bodyTextPromise;
+        };
         const response = {
           ok: res.statusCode >= HTTP_SUCCESS_MIN && res.statusCode < HTTP_SUCCESS_MAX,
           status: res.statusCode,
           statusText: res.statusMessage,
           headers: new Map(Object.entries(res.headers)),
-          body: Readable.toWeb(res),
-          text: async () => {
-            const chunks = [];
-            for await (const chunk of res) chunks.push(chunk);
-            return Buffer.concat(chunks).toString();
+          get body() {
+            if (!webBody) webBody = Readable.toWeb(res);
+            return webBody;
           },
-          json: async () => JSON.parse(await response.text()),
+          text: readText,
+          json: async () => JSON.parse(await readText()),
+          clone: () => response,
         };
         resolve(response);
       });
+      activeReq = req;
 
       req.on("error", cleanupAndReject);
       if (options.body) {

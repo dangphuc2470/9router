@@ -19,6 +19,7 @@ function sanitizeFunctionName(name) {
 
 const MAX_RETRY_AFTER_MS = 10000;
 const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
+const ANTIGRAVITY_CONNECT_TIMEOUT_MS = 25000;
 const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 64000;
 const ANTIGRAVITY_IDE_REQUEST_ID_RE = /^agent\/[^/]+\/\d+\/[^/]+\/\d+$/;
 
@@ -113,6 +114,10 @@ function buildIdeRequestId({ body, request, credentials, model, requestType }) {
 export class AntigravityExecutor extends BaseExecutor {
   constructor() {
     super("antigravity", PROVIDERS.antigravity);
+  }
+
+  getConnectTimeoutMs() {
+    return ANTIGRAVITY_CONNECT_TIMEOUT_MS;
   }
 
   // Parse Antigravity quota error to extract precise resetsAtMs from ErrorInfo/RetryInfo
@@ -473,6 +478,7 @@ export class AntigravityExecutor extends BaseExecutor {
     if (retryMs) return retryMs <= MAX_RETRY_AFTER_MS ? retryMs : false;
 
     if (!this.isTransientAntigravityError(response.status, errorMessage)) return false;
+    if (response.status === HTTP_STATUS.SERVICE_UNAVAILABLE && attempt > 1) return false;
 
     const cap = response.status === HTTP_STATUS.RATE_LIMITED
       ? MAX_RETRY_AFTER_MS
