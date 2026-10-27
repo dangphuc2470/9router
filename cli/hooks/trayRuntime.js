@@ -33,8 +33,20 @@ const LEGACY_SYSTRAY_PKG = "systray";
 // when GitHub updates it the sha changes, the workflow refuses to publish, and
 // this constant must be bumped in the same change as the re-upload.
 const ARM64_TRAY_URL = "https://github.com/decolua/9router/releases/download/tray-binaries/tray_darwin_arm64";
+const ARM64_TRAY_FALLBACK_URL = "https://github.com/dangphuc2470/9router/releases/download/tray-binaries/tray_darwin_arm64";
 const ARM64_TRAY_SHA256 = "487e3c365aaa1eb6ad295bf3989711e975b52cee07505bf641c8559954881c81";
 const ARM64_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const ARM64_NOT_FOUND_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+function hasRosetta() {
+  if (process.platform !== "darwin") return false;
+  try {
+    const res = spawnSync("arch", ["-x86_64", "/usr/bin/true"], { timeout: 3000 });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+}
 
 function hasSystray() {
   return fs.existsSync(path.join(getRuntimeNodeModules(), SYSTRAY_PKG, "package.json"));
@@ -127,18 +139,21 @@ function arm64AttemptMarker() {
 }
 
 // ensureTrayRuntime runs synchronously on every `9router` start (cli.js), so a
-// failed download must not re-block the next launch. Retry at most daily.
+// failed download must not re-block the next launch. Retry at most daily (or longer on 404).
 function recentlyAttemptedArm64() {
   try {
-    const at = Number(fs.readFileSync(arm64AttemptMarker(), "utf8").trim());
-    return Number.isFinite(at) && Date.now() - at < ARM64_RETRY_COOLDOWN_MS;
+    const raw = fs.readFileSync(arm64AttemptMarker(), "utf8").trim();
+    const parts = raw.split(":");
+    const at = Number(parts[0]);
+    const ttl = Number(parts[1]) || ARM64_RETRY_COOLDOWN_MS;
+    return Number.isFinite(at) && Date.now() - at < ttl;
   } catch {
     return false;
   }
 }
 
-function markArm64Attempt() {
-  try { fs.writeFileSync(arm64AttemptMarker(), String(Date.now())); } catch {}
+function markArm64Attempt(ttl = ARM64_RETRY_COOLDOWN_MS) {
+  try { fs.writeFileSync(arm64AttemptMarker(), `${Date.now()}:${ttl}`); } catch {}
 }
 
 // Cleared on success so the cooldown only ever throttles *failures*. Without
@@ -189,7 +204,21 @@ function ensureArm64TrayBin() {
   // checksum, and delete each other's in-flight download from the catch below.
   const tmp = `${binPath}.arm64.${process.pid}.tmp`;
   try {
-    downloadFile(ARM64_TRAY_URL, tmp, 30);
+    let downloaded = false;
+    let lastDownloadError = null;
+    for (const targetUrl of [ARM64_TRAY_URL, ARM64_TRAY_FALLBACK_URL]) {
+      try {
+        downloadFile(targetUrl, tmp, 15);
+        downloaded = true;
+        break;
+      } catch (dlErr) {
+        lastDownloadError = dlErr;
+      }
+    }
+    if (!downloaded) {
+      throw lastDownloadError || new Error("download failed");
+    }
+
     const sum = sha256File(tmp);
     // Integrity matters more than usual: this is an executable that runs on
     // every Apple Silicon user's machine.
@@ -203,9 +232,16 @@ function ensureArm64TrayBin() {
     return { native: true, installed: true };
   } catch (e) {
     try { fs.rmSync(tmp, { force: true }); } catch {}
-    console.warn("⚠️  Native tray download failed — falling back to the Intel binary");
-    console.warn(`   Reason: ${e.message}`);
-    console.warn("   The Intel tray needs Rosetta 2: softwareupdate --install-rosetta --agree-to-license");
+    const isNotFound = /404|exit 56|exit 22/i.test(e.message);
+    markArm64Attempt(isNotFound ? ARM64_NOT_FOUND_COOLDOWN_MS : ARM64_RETRY_COOLDOWN_MS);
+
+    if (hasRosetta()) {
+      console.log("ℹ️  Native Apple Silicon tray binary unavailable online — running Intel tray via Rosetta 2");
+    } else {
+      console.warn("⚠️  Native tray download failed — falling back to the Intel binary");
+      console.warn(`   Reason: ${e.message}`);
+      console.warn("   The Intel tray needs Rosetta 2: softwareupdate --install-rosetta --agree-to-license");
+    }
     return { native: false, error: e.message };
   }
 }
