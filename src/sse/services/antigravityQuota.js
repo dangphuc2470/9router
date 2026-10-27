@@ -237,16 +237,6 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, now) 
   }
 }
 
-/**
- * Map Antigravity model name to its quota family ("claude_gpt" or "gemini").
- */
-export function getAntigravityModelFamily(model) {
-  if (!model) return null;
-  const m = String(model).toLowerCase();
-  if (m.startsWith("claude") || m.startsWith("gpt")) return "claude_gpt";
-  if (m.startsWith("gemini")) return "gemini";
-  return null;
-}
 
 /**
  * Resolve quota object for a given model, checking direct model key first,
