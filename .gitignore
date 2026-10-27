@@ -103,3 +103,4 @@ start-dev-silent.cjs
 debug.log
 *.zip
 9router_backup/
+.scratch/
