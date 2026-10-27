@@ -813,3 +813,125 @@ export async function getRecentLogs(limit = 200) {
     return [];
   }
 }
+
+export async function exportUsageSince(sinceTimestamp = null) {
+  try {
+    const db = await getAdapter();
+    const sql = sinceTimestamp
+      ? `SELECT id, timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta FROM usageHistory WHERE timestamp > ? ORDER BY timestamp ASC LIMIT 5000`
+      : `SELECT id, timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta FROM usageHistory ORDER BY timestamp ASC LIMIT 5000`;
+    const params = sinceTimestamp ? [sinceTimestamp] : [];
+    const rows = db.all(sql, params);
+    return rows.map((r) => ({
+      ...r,
+      tokens: parseJson(r.tokens, {}),
+      meta: parseJson(r.meta, {}),
+    }));
+  } catch (e) {
+    console.error("[usageRepo] exportUsageSince failed:", e.message);
+    return [];
+  }
+}
+
+export async function importUsageEntries(entries = []) {
+  if (!Array.isArray(entries) || entries.length === 0) return 0;
+  try {
+    const db = await getAdapter();
+    let importedCount = 0;
+
+    db.transaction(() => {
+      for (const raw of entries) {
+        if (!raw || !raw.timestamp) continue;
+        const tokens = typeof raw.tokens === "string" ? parseJson(raw.tokens, {}) : (raw.tokens || {});
+        const promptTokens = raw.promptTokens ?? tokens.prompt_tokens ?? tokens.input_tokens ?? 0;
+        const completionTokens = raw.completionTokens ?? tokens.completion_tokens ?? tokens.output_tokens ?? 0;
+        const cachedTokens = tokens.cached_tokens ?? tokens.cache_read_input_tokens ?? 0;
+
+        const entry = {
+          timestamp: raw.timestamp,
+          provider: raw.provider || null,
+          model: raw.model || null,
+          connectionId: raw.connectionId || null,
+          apiKey: raw.apiKey || null,
+          endpoint: raw.endpoint || null,
+          promptTokens,
+          completionTokens,
+          cost: raw.cost ?? 0,
+          status: raw.status || "ok",
+          tokens: {
+            ...tokens,
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            cached_tokens: cachedTokens,
+          },
+          meta: typeof raw.meta === "string" ? parseJson(raw.meta, {}) : (raw.meta || {}),
+        };
+
+        const existing = db.get(
+          `SELECT id, endpoint FROM usageHistory
+           WHERE timestamp = ?
+             AND COALESCE(provider, '') = COALESCE(?, '')
+             AND COALESCE(model, '') = COALESCE(?, '')
+             AND COALESCE(connectionId, '') = COALESCE(?, '')
+             AND COALESCE(apiKey, '') = COALESCE(?, '')
+             AND promptTokens = ?
+             AND completionTokens = ?
+           ORDER BY id DESC LIMIT 1`,
+          [
+            entry.timestamp, entry.provider, entry.model,
+            entry.connectionId, entry.apiKey,
+            promptTokens, completionTokens,
+          ]
+        );
+
+        if (existing) {
+          if (!existing.endpoint && entry.endpoint) {
+            db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
+          }
+          continue; // Exact match found: SKIP to prevent double-counting
+        }
+
+        db.run(
+          `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            entry.timestamp, entry.provider, entry.model,
+            entry.connectionId, entry.apiKey, entry.endpoint,
+            promptTokens, completionTokens, entry.cost, entry.status,
+            stringifyJson(entry.tokens), stringifyJson(entry.meta),
+          ]
+        );
+
+        const dateKey = getLocalDateKey(entry.timestamp);
+        const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
+        const day = row ? parseJson(row.data, {}) : {
+          requests: 0, promptTokens: 0, completionTokens: 0, cost: 0,
+          byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
+        };
+        aggregateEntryToDay(day, entry);
+        db.run(
+          `INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`,
+          [dateKey, stringifyJson(day)]
+        );
+
+        const cur = db.get(`SELECT value FROM _meta WHERE key = 'totalRequestsLifetime'`);
+        const next = (cur ? parseInt(cur.value, 10) : 0) + 1;
+        db.run(
+          `INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [String(next)]
+        );
+
+        pushToRing(entry);
+        importedCount++;
+      }
+    });
+
+    if (importedCount > 0) {
+      scheduleStatsEvent("update", 250);
+    }
+    return importedCount;
+  } catch (e) {
+    console.error("[usageRepo] importUsageEntries failed:", e.message);
+    throw e;
+  }
+}
+
