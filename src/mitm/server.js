@@ -40,6 +40,7 @@ let rootCAPem;
 
 function sniCallback(servername, cb) {
   try {
+    if (!servername || !getToolForHost(servername)) return cb(null, null);
     if (certCache.has(servername)) return cb(null, certCache.get(servername));
     const certData = getCertForDomain(servername);
     if (!certData) return cb(new Error(`Failed to generate cert for ${servername}`));
@@ -86,15 +87,39 @@ function clearTargetIPCache(hostname) {
   }
 }
 
+function isLocalOrLoopback(hostOrIp) {
+  if (!hostOrIp) return true;
+  const h = String(hostOrIp).trim().toLowerCase().replace(/^\[|\]$/g, "").split(":")[0];
+  return (
+    !h ||
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h === "::1" ||
+    h === "0.0.0.0" ||
+    h === "::" ||
+    h.startsWith("127.") ||
+    h.startsWith("::ffff:127.")
+  );
+}
+
 async function resolveTargetIP(hostname) {
+  if (isLocalOrLoopback(hostname)) {
+    throw new Error(`Refusing loopback/local passthrough host: ${hostname}`);
+  }
   const cached = cachedTargetIPs[hostname];
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.ip;
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS && !isLocalOrLoopback(cached.ip)) {
+    return cached.ip;
+  }
   try {
     const resolver = new dns.Resolver();
     resolver.setServers(["8.8.8.8"]);
     const resolve4 = promisify(resolver.resolve4.bind(resolver));
     const addresses = await resolve4(hostname);
-    cachedTargetIPs[hostname] = { ip: addresses[0], ts: Date.now() };
+    const validIp = (addresses || []).find(ip => !isLocalOrLoopback(ip));
+    if (!validIp) {
+      throw new Error(`Resolved only loopback/local IP for ${hostname}: ${(addresses || []).join(",")}`);
+    }
+    cachedTargetIPs[hostname] = { ip: validIp, ts: Date.now() };
     return cachedTargetIPs[hostname].ip;
   } catch (e) {
     delete cachedTargetIPs[hostname];
@@ -139,13 +164,19 @@ function getMappedModel(tool, model) {
  * Also tees full stream into a dump file when ENABLE_FILE_LOG is on.
  */
 async function passthrough(req, res, bodyBuffer, onResponse) {
-  const originalHost = (req.headers.host || TARGET_HOSTS[0]).split(":")[0];
+  const rawHost = (req.headers.host || "").split(":")[0];
+  const tool = getToolForHost(req.headers.host);
+  if (!tool || isLocalOrLoopback(rawHost)) {
+    if (!res.headersSent) res.writeHead(404);
+    if (!res.writableEnded) res.end("Not Found");
+    return;
+  }
+  const originalHost = rawHost || TARGET_HOSTS[0];
   // Only rewrite host for chat endpoints — daily-cloudcode-pa rejects auth/login requests
   const isChatEndpoint = req.url.includes(":generateContent") || req.url.includes(":streamGenerateContent");
   const targetHost = isChatEndpoint ? (HOST_REWRITE[originalHost] || originalHost) : originalHost;
   const dumper = ENABLE_FILE_LOG ? createResponseDumper(req, "passthrough") : null;
 
-  const tool = getToolForHost(req.headers.host);
   const versionOverride = tool === "antigravity"
     ? applyAntigravityIdeVersionOverride(bodyBuffer, req.headers, req.url)
     : { bodyBuffer, headers: req.headers };
@@ -165,7 +196,7 @@ async function passthrough(req, res, bodyBuffer, onResponse) {
     err(`[mitm] ALPN negotiate failed: ${e.message}, fallback to HTTP/1.1`);
   }
 
-  return passthroughHttps(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper);
+  return await passthroughHttps(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper);
 }
 
 // ── ALPN negotiation cache ────────────────────────────────────
@@ -291,7 +322,16 @@ async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onRes
 
 // Fallback: raw https.request HTTP/1.1 with custom DNS (bypasses /etc/hosts MITM loop)
 async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onResponse, dumper) {
-  const targetIP = await resolveTargetIP(targetHost);
+  let targetIP;
+  try {
+    targetIP = await resolveTargetIP(targetHost);
+  } catch (e) {
+    err(`Passthrough DNS error: ${e.message}`);
+    if (dumper) { dumper.writeChunk(`\n[ERROR] ${e.message}\n`); dumper.end(); }
+    if (!res.headersSent) res.writeHead(502);
+    if (!res.writableEnded) res.end("Bad Gateway");
+    return;
+  }
   const forwardReq = https.request({
     hostname: targetIP,
     port: 443,
@@ -355,19 +395,23 @@ const server = https.createServer(sslOptions, async (req, res) => {
 
     // Anti-loop: skip requests from 9Router
     if (req.headers[INTERNAL_REQUEST_HEADER.name] === INTERNAL_REQUEST_HEADER.value) {
-      return passthrough(req, res, bodyBuffer);
+      return await passthrough(req, res, bodyBuffer);
     }
 
     const tool = getToolForHost(req.headers.host);
-    if (!tool) return passthrough(req, res, bodyBuffer);
+    if (!tool) {
+      res.writeHead(404);
+      res.end("Not Found");
+      return;
+    }
 
     // Kiro IDE posts chat to `/` with x-amz-target (not path /generateAssistantResponse)
-    if (!isChatRequest(tool, req)) return passthrough(req, res, bodyBuffer);
+    if (!isChatRequest(tool, req)) return await passthrough(req, res, bodyBuffer);
 
     // Cursor uses binary proto — model extraction not possible at this layer.
     // Delegate directly to handler which decodes proto internally.
     if (tool === "cursor") {
-      return handlers[tool].intercept(req, res, bodyBuffer, null, passthrough);
+      return await handlers[tool].intercept(req, res, bodyBuffer, null, passthrough);
     }
 
     const model = extractModel(req.url, bodyBuffer);
@@ -376,15 +420,15 @@ const server = https.createServer(sslOptions, async (req, res) => {
     // tab-autocomplete) so latency-critical inline completion stays native. Silent — this
     // is by design, not a leak, and fires per keystroke. See MODEL_NO_MAP in config.js.
     if (model && (MODEL_NO_MAP[tool] || []).some((re) => re.test(model))) {
-      return passthrough(req, res, bodyBuffer);
+      return await passthrough(req, res, bodyBuffer);
     }
 
     const mappedModel = getMappedModel(tool, model);
     if (!mappedModel) {
-      return passthrough(req, res, bodyBuffer);
+      return await passthrough(req, res, bodyBuffer);
     }
 
-    return handlers[tool].intercept(req, res, bodyBuffer, mappedModel, passthrough);
+    return await handlers[tool].intercept(req, res, bodyBuffer, mappedModel, passthrough);
   } catch (e) {
     err(`Unhandled error: ${e.message}`);
     if (!res.headersSent) res.writeHead(500, { "Content-Type": "application/json" });

@@ -700,7 +700,11 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
       const msg = data.toString().trim();
       // Mac/Linux: filter sudo password prompt noise
       if (msg && (IS_WIN || (!msg.includes("Password:") && !msg.includes("password for")))) {
-        err(msg);
+        if (msg.startsWith("[")) {
+          process.stderr.write(data);
+        } else {
+          err(msg);
+        }
         startError = msg;
       }
       // Detect wrong/missing password — clear cache and stop retry loop
