@@ -7,7 +7,7 @@ const { fetchRouter, pipeSSE } = require("./base");
  * Router auto-detects format via body.userAgent==="antigravity" + body.request.contents,
  * runs antigravity→openai→provider→openai→antigravity translators internally.
  */
-async function intercept(req, res, bodyBuffer, mappedModel) {
+async function intercept(req, res, bodyBuffer, mappedModel, passthrough) {
   const dumper = IS_DEV ? createResponseDumper(req, "intercept-antigravity") : null;
   const isStream = req.url.includes(":streamGenerateContent");
   try {
@@ -15,8 +15,18 @@ async function intercept(req, res, bodyBuffer, mappedModel) {
     if (body.model) body.model = mappedModel;
 
     const routerRes = await fetchRouter(body, "/v1/chat/completions", req.headers);
+    if (!routerRes.ok && routerRes.status >= 500 && typeof passthrough === "function") {
+      err(`[antigravity] 9Router returned HTTP ${routerRes.status} → fallback to native passthrough`);
+      if (dumper) dumper.writeChunk(`\n[FALLBACK HTTP ${routerRes.status}]\n`);
+      return await passthrough(req, res, bodyBuffer);
+    }
     await pipeSSE(routerRes, res, dumper);
   } catch (error) {
+    if (typeof passthrough === "function") {
+      err(`[antigravity] 9Router offline (${error.message}) → fallback to native passthrough`);
+      if (dumper) dumper.writeChunk(`\n[FALLBACK ERROR: ${error.message}]\n`);
+      return await passthrough(req, res, bodyBuffer);
+    }
     err(`[antigravity] ${error.message}`);
     if (dumper) { dumper.writeChunk(`\n[ERROR] ${error.message}\n`); dumper.end(); }
     // For stream endpoint, send SSE error chunk so SDK doesn't hang waiting

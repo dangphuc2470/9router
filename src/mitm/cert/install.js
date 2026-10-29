@@ -109,6 +109,18 @@ async function installCertMac(sudoPassword, certPath) {
   const install = `security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${certPath}"`;
   try {
     await execWithPassword(`${deleteOld} && ${install}`, sudoPassword);
+    // Also build ca-bundle.pem and register SSL_CERT_FILE with launchctl for Go runtimes (e.g. Antigravity)
+    try {
+      const pathModule = require("path");
+      const bundlePath = pathModule.join(pathModule.dirname(certPath), "ca-bundle.pem");
+      const systemCert = "/etc/ssl/cert.pem";
+      if (fs.existsSync(systemCert) && fs.existsSync(certPath)) {
+        const bundle = fs.readFileSync(systemCert, "utf8") + "\n" + fs.readFileSync(certPath, "utf8");
+        fs.writeFileSync(bundlePath, bundle, "utf8");
+        exec(`launchctl setenv SSL_CERT_FILE "${bundlePath}" 2>/dev/null || true`);
+        exec(`launchctl setenv GRPC_DEFAULT_SSL_ROOTS_FILE_PATH "${bundlePath}" 2>/dev/null || true`);
+      }
+    } catch {}
     log("🔐 Cert: ✅ installed to system keychain");
   } catch (error) {
     const msg = error.message?.includes("canceled") ? "User canceled authorization" : "Certificate install failed";
