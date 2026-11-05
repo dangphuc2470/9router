@@ -174,10 +174,27 @@ function decryptPassword(stored) {
   try {
     const [ivHex, tagHex, dataHex] = stored.split(":");
     if (!ivHex || !tagHex || !dataHex) return null;
-    const key = deriveKey();
-    const decipher = crypto.createDecipheriv(ENCRYPT_ALGO, key, Buffer.from(ivHex, "hex"));
-    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
-    return decipher.update(Buffer.from(dataHex, "hex")) + decipher.final("utf8");
+    const iv = Buffer.from(ivHex, "hex");
+    const tag = Buffer.from(tagHex, "hex");
+    const data = Buffer.from(dataHex, "hex");
+
+    const tryWithKey = (key) => {
+      try {
+        const decipher = crypto.createDecipheriv(ENCRYPT_ALGO, key, iv);
+        decipher.setAuthTag(tag);
+        return decipher.update(data) + decipher.final("utf8");
+      } catch {
+        return null;
+      }
+    };
+
+    // Try primary key (with machineId)
+    const primary = tryWithKey(deriveKey());
+    if (primary) return primary;
+
+    // Fallback key (salt only, in case encrypted when node-machine-id was absent)
+    const fallbackKey = crypto.createHash("sha256").update(ENCRYPT_SALT).digest();
+    return tryWithKey(fallbackKey);
   } catch {
     return null;
   }
