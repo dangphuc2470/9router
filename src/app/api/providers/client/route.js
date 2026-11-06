@@ -8,6 +8,7 @@ const SAFE_FIELDS = [
   "priority", "globalPriority", "isActive", "defaultModel",
   "testStatus", "lastError", "lastErrorAt", "errorCode",
   "expiresAt", "lastUsedAt", "consecutiveUseCount",
+  "throttledUntil", "throttledReason", "throttledStreak",
   "createdAt", "updatedAt",
 ];
 

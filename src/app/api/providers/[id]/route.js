@@ -120,6 +120,9 @@ export async function PUT(request, { params }) {
     if (testStatus !== undefined) updateData.testStatus = testStatus;
     if (lastError !== undefined) updateData.lastError = lastError;
     if (lastErrorAt !== undefined) updateData.lastErrorAt = lastErrorAt;
+    if (body.throttledUntil !== undefined) updateData.throttledUntil = body.throttledUntil;
+    if (body.throttledReason !== undefined) updateData.throttledReason = body.throttledReason;
+    if (body.throttledStreak !== undefined) updateData.throttledStreak = body.throttledStreak;
 
     if (
       shouldMergeProviderSpecificData(

@@ -136,6 +136,9 @@ export function getModelLockKey(model) {
 
 export function isModelLockActive(connection, model) {
   if (!connection) return false;
+  if (connection.throttledUntil && new Date(connection.throttledUntil).getTime() > Date.now()) {
+    return true;
+  }
   const isAntigravity = connection.provider === "antigravity" || connection.authType === "antigravity";
   const m = model ? String(model).toLowerCase() : "";
   const isClaudeGpt = m.startsWith("claude") || m.startsWith("gpt");
@@ -171,6 +174,10 @@ export function getEarliestModelLockUntil(connection) {
   if (!connection) return null;
   let earliest = null;
   const now = Date.now();
+  if (connection.throttledUntil) {
+    const t = new Date(connection.throttledUntil).getTime();
+    if (t > now) earliest = t;
+  }
   for (const [key, val] of Object.entries(connection)) {
     if (!key.startsWith(MODEL_LOCK_PREFIX) || !val) continue;
     const t = new Date(val).getTime();

@@ -1167,6 +1167,41 @@ export default function ProviderLimits() {
                           {getConnectionSecondaryLabel(conn)}
                         </p>
                       ) : null}
+                      {conn.throttledUntil && new Date(conn.throttledUntil).getTime() > Date.now() && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                            title={conn.throttledReason || "Google deprioritized queue"}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">speed</span>
+                            Throttled (bị bóp) · Chờ reset
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await fetch(`/api/providers/${conn.id}`, {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    throttledUntil: null,
+                                    throttledReason: null,
+                                    throttledStreak: 0,
+                                    testStatus: "active"
+                                  })
+                                });
+                                await fetchConnections();
+                              } catch (err) {
+                                console.error("Failed to unthrottle", err);
+                              }
+                            }}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-600 underline hover:text-amber-700 dark:text-amber-400"
+                            title="Gỡ cờ bị bóp và thử lại ngay"
+                          >
+                            Gỡ cờ
+                          </button>
+                        </div>
+                      )}
                       {conn.provider === "kiro" && (
                         <div className="mt-1 flex flex-wrap items-center gap-1">
                           <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
