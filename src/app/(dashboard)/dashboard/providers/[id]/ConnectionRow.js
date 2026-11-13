@@ -133,6 +133,30 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
 
   // Use useState + useEffect for impure Date.now() to avoid calling during render
   const [isCooldown, setIsCooldown] = useState(false);
+  const [isThrottled, setIsThrottled] = useState(false);
+  const [clearingThrottled, setClearingThrottled] = useState(false);
+
+  const handleClearThrottled = async (e) => {
+    e.stopPropagation();
+    setClearingThrottled(true);
+    try {
+      await fetch(`/api/providers/${connection.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          throttledUntil: null,
+          throttledReason: null,
+          throttledStreak: 0,
+          testStatus: "active"
+        })
+      });
+      if (onToggleActive) onToggleActive(connection.isActive ?? true);
+    } catch (err) {
+      console.error("Failed to clear throttled status", err);
+    } finally {
+      setClearingThrottled(false);
+    }
+  };
 
   // Get earliest model lock timestamp (useEffect handles the Date.now() comparison)
   const modelLockUntil = Object.entries(connection)
@@ -149,18 +173,19 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
         .filter(v => v && new Date(v).getTime() > Date.now())
         .sort()[0] || null;
       setIsCooldown(!!until);
+      setIsThrottled(!!(connection.throttledUntil && new Date(connection.throttledUntil).getTime() > Date.now()));
     };
 
     checkCooldown();
-    const interval = modelLockUntil ? setInterval(checkCooldown, 1000) : null;
+    const interval = (modelLockUntil || connection.throttledUntil) ? setInterval(checkCooldown, 1000) : null;
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [modelLockUntil]);
+  }, [modelLockUntil, connection.throttledUntil]);
 
   // Determine effective status (override unavailable if cooldown expired)
-  const effectiveStatus = (connection.testStatus === "unavailable" && !isCooldown)
-    ? "active"  // Cooldown expired u2192 treat as active
+  const effectiveStatus = (connection.testStatus === "unavailable" && !isCooldown && !isThrottled)
+    ? "active"  // Cooldown expired → treat as active
     : connection.testStatus;
 
   const getStatusVariant = () => getConnectionStatusVariant(connection.isActive, effectiveStatus);
@@ -221,6 +246,22 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
               <Badge variant={proxyBadgeVariant} size="sm">
                 Proxy
               </Badge>
+            )}
+            {isThrottled && connection.isActive !== false && (
+              <div className="inline-flex items-center gap-1">
+                <Badge variant="warning" size="sm" dot title={connection.throttledReason || "Google deprioritized queue"}>
+                  Throttled (bị bóp)
+                </Badge>
+                <button
+                  type="button"
+                  onClick={handleClearThrottled}
+                  disabled={clearingThrottled}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                  title="Gỡ cờ bị bóp và kích hoạt lại tài khoản"
+                >
+                  {clearingThrottled ? "Đang gỡ..." : "Gỡ bóp"}
+                </button>
+              </div>
             )}
             {isCooldown && connection.isActive !== false && <CooldownTimer until={modelLockUntil} />}
             {connection.lastError && connection.isActive !== false && (

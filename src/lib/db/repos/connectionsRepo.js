@@ -8,6 +8,7 @@ const OPTIONAL_FIELDS = [
   "scope", "projectId", "apiKey", "testStatus",
   "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn", "errorCode",
   "consecutiveUseCount", "idToken", "lastRefreshAt",
+  "throttledUntil", "throttledReason", "throttledStreak",
 ];
 
 const MODEL_LOCK_PREFIX = "modelLock_";
@@ -23,6 +24,9 @@ function resetHealthStateOnActivation(existing, patch) {
     errorCode: null,
     rateLimitedUntil: null,
     backoffLevel: 0,
+    throttledUntil: null,
+    throttledReason: null,
+    throttledStreak: 0,
   };
 
   for (const key of Object.keys(existing || {})) {

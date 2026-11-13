@@ -83,9 +83,13 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const isAntigravity = providerId === "antigravity";
     const antigravityQuotaCache = isAntigravity && model ? getAntigravityQuotaCache() : null;
 
-    // Filter out model-locked, excluded, and Antigravity quota-exhausted connections.
+    // Filter out model-locked, throttled, excluded, and Antigravity quota-exhausted connections.
     const availableConnections = connections.filter(c => {
       if (excludeSet.has(c.id)) return false;
+      if (c.throttledUntil && new Date(c.throttledUntil).getTime() > Date.now()) {
+        log.warn("AUTH", `${c.id?.slice(0, 8)} | THROTTLED_SKIP until ${c.throttledUntil} (${c.throttledReason || "Google queue throttled"})`);
+        return false;
+      }
       if (isModelLockActive(c, model)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
       if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
@@ -106,16 +110,17 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     log.debug("AUTH", `${provider} | available: ${availableConnections.length}/${connections.length}`);
     connections.forEach(c => {
       const excluded = excludeSet.has(c.id);
+      const throttled = c.throttledUntil && new Date(c.throttledUntil).getTime() > Date.now();
       const locked = isModelLockActive(c, model);
-      if (excluded || locked) {
+      if (excluded || throttled || locked) {
         const lockUntil = getEarliestModelLockUntil(c);
-        log.debug("AUTH", `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
+        log.debug("AUTH", `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${throttled ? `throttled until ${c.throttledUntil}` : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
       }
     });
 
     if (availableConnections.length === 0) {
       // Find earliest persistent lock or lazy Antigravity quota-cache reset for retry timing.
-      const lockedConns = connections.filter(c => isModelLockActive(c, model));
+      const lockedConns = connections.filter(c => isModelLockActive(c, model) || (c.throttledUntil && new Date(c.throttledUntil).getTime() > Date.now()));
       const expiries = lockedConns.map(c => getEarliestModelLockUntil(c)).filter(Boolean);
       if (isAntigravity && model && antigravityQuotaCache) {
         connections.forEach((c) => {
@@ -254,9 +259,28 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   // GitHub premium-request exhaustion is account-wide until the next UTC month.
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
-  // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff
-  let shouldFallback, cooldownMs, newBackoffLevel;
-  if (githubResetAtMs) {
+  // Check for connect timeout / Google queue deprioritization
+  const lowerError = typeof errorText === "string" ? errorText.toLowerCase() : "";
+  const isConnectTimeout =
+    lowerError.includes("fetch connect timeout") ||
+    lowerError.includes("connect timeout") ||
+    lowerError.includes("gateway timeout") ||
+    status === 504 ||
+    (status === 502 && lowerError.includes("timeout"));
+
+  let shouldFallback, cooldownMs, newBackoffLevel, throttledUntil = null, throttledReason = null, newStreak = 0;
+
+  if (isConnectTimeout) {
+    shouldFallback = true;
+    newStreak = (conn?.throttledStreak || 0) + 1;
+    // Streak 1: 15 minutes, Streak >= 2: 24 hours (skip whole day)
+    cooldownMs = newStreak >= 2 ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000;
+    throttledUntil = new Date(Date.now() + cooldownMs).toISOString();
+    throttledReason = newStreak >= 2
+      ? "Google queue deprioritized (Repeated connect timeout > 100s)"
+      : "Connect timeout > 100s (Queue throttled)";
+    newBackoffLevel = backoffLevel;
+  } else if (githubResetAtMs) {
     shouldFallback = true;
     cooldownMs = githubResetAtMs - Date.now();
     newBackoffLevel = 0;
@@ -276,7 +300,15 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const isAntigravity = resolveProviderId(provider) === "antigravity";
   let lockUpdate = {};
 
-  if (isAntigravity && model) {
+  if (isConnectTimeout) {
+    // When connect timeout happens, the entire connection/account is throttled upstream
+    lockUpdate = {
+      ...buildModelLockUpdate(null, cooldownMs),
+      ...buildModelLockUpdate("gemini", cooldownMs),
+      ...buildModelLockUpdate("claude_gpt", cooldownMs),
+      ...(model ? buildModelLockUpdate(model, cooldownMs) : {})
+    };
+  } else if (isAntigravity && model) {
     const family = getAntigravityModelFamily(model);
     if (family) {
       lockUpdate = {
@@ -297,14 +329,19 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
-    backoffLevel: newBackoffLevel ?? backoffLevel
+    backoffLevel: newBackoffLevel ?? backoffLevel,
+    ...(isConnectTimeout ? {
+      throttledUntil,
+      throttledReason,
+      throttledStreak: newStreak,
+    } : {})
   };
 
   await updateProviderConnection(connectionId, updatePayload);
 
   const lockKey = Object.keys(lockUpdate).join(", ");
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
-  log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
+  log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]${isConnectTimeout ? ` (THROTTLED streak #${newStreak} until ${throttledUntil})` : ""}`);
 
   if (provider && status && reason) {
     console.error(`❌ ${provider} [${status}]: ${reason}`);
@@ -353,14 +390,17 @@ export async function clearAccountError(connectionId, currentConnection, model =
 
   const clearObj = Object.fromEntries(keysToClear.map(k => [k, null]));
 
-  // Only reset error state if no active locks remain
-  if (remainingActiveLocks.length === 0) {
+  // Only reset error state if no active locks remain and connection is not currently throttled
+  if (remainingActiveLocks.length === 0 && (!conn.throttledUntil || new Date(conn.throttledUntil).getTime() <= now)) {
     Object.assign(clearObj, {
       testStatus: "active",
       lastError: null,
       errorCode: null,
       lastErrorAt: null,
-      backoffLevel: 0
+      backoffLevel: 0,
+      throttledUntil: null,
+      throttledReason: null,
+      throttledStreak: 0
     });
   }
 
