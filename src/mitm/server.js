@@ -4,6 +4,7 @@ const tls = require("tls");
 const fs = require("fs");
 const path = require("path");
 const dns = require("dns");
+const zlib = require("zlib");
 const { promisify } = require("util");
 const { execSync } = require("child_process");
 const { log, err, dumpRequest, createResponseDumper, clearDumpDir } = require("./logger");
@@ -12,6 +13,7 @@ const { DATA_DIR, MITM_DIR } = require("./paths");
 const { generateCert, getCertForDomain } = require("./cert/generate");
 const { getMitmAlias } = require("./dbReader");
 const { applyAntigravityIdeVersionOverride } = require("./antigravityIdeVersion");
+const { patchFetchAvailableModelsResponse } = require("./antigravityCatalogMock");
 const LOCAL_PORT = 443;
 const IS_WIN = process.platform === "win32";
 const ENABLE_FILE_LOG = IS_DEV;
@@ -151,19 +153,38 @@ function getMappedModel(tool, model) {
     // Pattern fallback: catches AG renamed variants (e.g. deprecated pro IDs → gemini-pro-agent)
     const patterns = MODEL_PATTERNS?.[tool] || [];
     for (const { match, alias } of patterns) {
-      if (match.test(lookup) && aliases[alias]) return aliases[alias];
+      if (match.test(lookup)) return aliases[alias] || null;
     }
     return null;
   } catch { return null; }
+}
+
+function sendTransformedResponse(res, status, headers, rawBuffer, transformResponse) {
+  let body = rawBuffer;
+  const outHeaders = { ...headers };
+  const enc = String(outHeaders["content-encoding"] || outHeaders["Content-Encoding"] || "").toLowerCase();
+  try {
+    if (enc.includes("gzip")) body = zlib.gunzipSync(body);
+    else if (enc.includes("br")) body = zlib.brotliDecompressSync(body);
+    else if (enc.includes("deflate")) body = zlib.inflateSync(body);
+  } catch { /* keep raw if decompression fails */ }
+  const transformed = transformResponse(body, outHeaders);
+  delete outHeaders["content-encoding"];
+  delete outHeaders["Content-Encoding"];
+  delete outHeaders["transfer-encoding"];
+  delete outHeaders["Transfer-Encoding"];
+  outHeaders["content-length"] = String(transformed.length);
+  res.writeHead(status, outHeaders);
+  res.end(transformed);
 }
 
 /**
  * Forward request to real upstream.
  * Optional onResponse(rawBuffer) callback — if provided, tees the response
  * so it's both forwarded to client AND passed to the callback for inspection.
- * Also tees full stream into a dump file when ENABLE_FILE_LOG is on.
+ * Optional transformResponse(decompressedBuf, headers) buffers and rewrites the response before sending.
  */
-async function passthrough(req, res, bodyBuffer, onResponse) {
+async function passthrough(req, res, bodyBuffer, onResponse, transformResponse) {
   const rawHost = (req.headers.host || "").split(":")[0];
   const tool = getToolForHost(req.headers.host);
   if (!tool || isLocalOrLoopback(rawHost)) {
@@ -190,13 +211,13 @@ async function passthrough(req, res, bodyBuffer, onResponse) {
   try {
     const proto = await negotiateAlpn(targetHost);
     if (proto === "h2") {
-      return await passthroughHttp2(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper);
+      return await passthroughHttp2(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper, transformResponse);
     }
   } catch (e) {
     err(`[mitm] ALPN negotiate failed: ${e.message}, fallback to HTTP/1.1`);
   }
 
-  return await passthroughHttps(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper);
+  return await passthroughHttps(req, res, bodyForForwarding, headersForForwarding, targetHost, onResponse, dumper, transformResponse);
 }
 
 // ── ALPN negotiation cache ────────────────────────────────────
@@ -221,7 +242,7 @@ async function negotiateAlpn(host) {
 }
 
 // HTTP/2 passthrough using node:http2 native
-async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onResponse, dumper) {
+async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onResponse, dumper, transformResponse) {
   const targetIP = await resolveTargetIP(targetHost);
   // HTTP/2 pseudo-headers required; strip HTTP/1.1-only headers
   const h2Headers = {};
@@ -290,19 +311,24 @@ async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onRes
         if (k === "connection" || k === "keep-alive" || k === "transfer-encoding") continue;
         outHeaders[k] = v;
       }
-      res.writeHead(status, outHeaders);
+      if (!transformResponse) res.writeHead(status, outHeaders);
       if (dumper) dumper.writeHeader(status, outHeaders);
 
       const chunks = [];
       stream.on("data", chunk => {
         if (dumper) dumper.writeChunk(chunk);
-        if (onResponse) chunks.push(chunk);
-        res.write(chunk);
+        if (onResponse || transformResponse) chunks.push(chunk);
+        if (!transformResponse) res.write(chunk);
       });
       stream.on("end", () => {
         if (dumper) dumper.end();
-        if (!res.writableEnded) res.end();
-        if (onResponse) try { onResponse(Buffer.concat(chunks), outHeaders); } catch {}
+        const full = (onResponse || transformResponse) ? Buffer.concat(chunks) : null;
+        if (transformResponse) {
+          sendTransformedResponse(res, status, outHeaders, full, transformResponse);
+        } else if (!res.writableEnded) {
+          res.end();
+        }
+        if (onResponse) try { onResponse(full, outHeaders); } catch {}
         try { client.close(); } catch {}
         safeResolve();
       });
@@ -321,7 +347,7 @@ async function passthroughHttp2(req, res, bodyBuffer, headers, targetHost, onRes
 }
 
 // Fallback: raw https.request HTTP/1.1 with custom DNS (bypasses /etc/hosts MITM loop)
-async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onResponse, dumper) {
+async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onResponse, dumper, transformResponse) {
   let targetIP;
   try {
     targetIP = await resolveTargetIP(targetHost);
@@ -342,10 +368,10 @@ async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onRes
     rejectUnauthorized: false,
     timeout: 8000,
   }, (forwardRes) => {
-    res.writeHead(forwardRes.statusCode, forwardRes.headers);
+    if (!transformResponse) res.writeHead(forwardRes.statusCode, forwardRes.headers);
     if (dumper) dumper.writeHeader(forwardRes.statusCode, forwardRes.headers);
 
-    if (!onResponse && !dumper) {
+    if (!onResponse && !dumper && !transformResponse) {
       forwardRes.pipe(res);
       return;
     }
@@ -353,13 +379,18 @@ async function passthroughHttps(req, res, bodyBuffer, headers, targetHost, onRes
     const chunks = [];
     forwardRes.on("data", chunk => {
       if (dumper) dumper.writeChunk(chunk);
-      if (onResponse) chunks.push(chunk);
-      res.write(chunk);
+      if (onResponse || transformResponse) chunks.push(chunk);
+      if (!transformResponse) res.write(chunk);
     });
     forwardRes.on("end", () => {
       if (dumper) dumper.end();
-      res.end();
-      if (onResponse) try { onResponse(Buffer.concat(chunks), forwardRes.headers); } catch { /* ignore */ }
+      const full = (onResponse || transformResponse) ? Buffer.concat(chunks) : null;
+      if (transformResponse) {
+        sendTransformedResponse(res, forwardRes.statusCode, forwardRes.headers, full, transformResponse);
+      } else {
+        res.end();
+      }
+      if (onResponse) try { onResponse(full, forwardRes.headers); } catch { /* ignore */ }
     });
   });
 
@@ -403,6 +434,15 @@ const server = https.createServer(sslOptions, async (req, res) => {
       res.writeHead(404);
       res.end("Not Found");
       return;
+    }
+
+    // Mock/merge full model catalog for older Antigravity IDE (2.5.5)
+    if (tool === "antigravity" && req.url.includes(":fetchAvailableModels")) {
+      return await passthrough(req, res, bodyBuffer, null, (respBuf) => {
+        const patched = patchFetchAvailableModelsResponse(respBuf);
+        log(`[antigravity] Patched :fetchAvailableModels catalog (${respBuf.length} -> ${patched.length} bytes)`);
+        return patched;
+      });
     }
 
     // Kiro IDE posts chat to `/` with x-amz-target (not path /generateAssistantResponse)

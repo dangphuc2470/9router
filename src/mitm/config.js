@@ -101,6 +101,17 @@ const MODEL_SYNONYMS = {
     "gemini-argon-high": "gemini-4-argon-high",
     "gemini-argon-medium": "gemini-4-argon-medium",
     "gemini-argon-low": "gemini-4-argon-low",
+    "gemini-4-neon": "gemini-4-neon-medium",
+    "gemini-4-neon-xhigh": "gemini-4-neon-xhigh",
+    "gemini-4-neon-high": "gemini-4-neon-high",
+    "gemini-4-neon-medium": "gemini-4-neon-medium",
+    "gemini-4-neon-low": "gemini-4-neon-low",
+    "gemini-4-hydrogen": "gemini-4-hydrogen-medium",
+    "gemini-4-hydrogen-xhigh": "gemini-4-hydrogen-xhigh",
+    "gemini-4-hydrogen-high": "gemini-4-hydrogen-high",
+    "gemini-4-hydrogen-medium": "gemini-4-hydrogen-medium",
+    "gemini-4-hydrogen-low": "gemini-4-hydrogen-low",
+    "gemini-4-hydrogen-sonar": "gemini-4-hydrogen-medium",
   },
 };
 
@@ -108,6 +119,16 @@ const MODEL_SYNONYMS = {
 // Order matters: more specific patterns first. Catches AG renamed variants (e.g. gemini-pro-agent)
 const MODEL_PATTERNS = {
   antigravity: [
+    { match: /neon.*xhigh|xhigh.*neon/i,                           alias: "gemini-4-neon-xhigh" },
+    { match: /neon.*low|low.*neon/i,                               alias: "gemini-4-neon-low" },
+    { match: /neon.*medium|medium.*neon/i,                         alias: "gemini-4-neon-medium" },
+    { match: /neon.*high|high.*neon/i,                             alias: "gemini-4-neon-high" },
+    { match: /neon/i,                                              alias: "gemini-4-neon-medium" },
+    { match: /hydrogen.*xhigh|xhigh.*hydrogen/i,                   alias: "gemini-4-hydrogen-xhigh" },
+    { match: /hydrogen.*low|low.*hydrogen/i,                       alias: "gemini-4-hydrogen-low" },
+    { match: /hydrogen.*medium|medium.*hydrogen/i,                 alias: "gemini-4-hydrogen-medium" },
+    { match: /hydrogen.*high|high.*hydrogen/i,                     alias: "gemini-4-hydrogen-high" },
+    { match: /hydrogen/i,                                          alias: "gemini-4-hydrogen-medium" },
     { match: /argon.*low|low.*argon/i,                             alias: "gemini-4-argon-low" },
     { match: /argon.*medium|medium.*argon/i,                       alias: "gemini-4-argon-medium" },
     { match: /argon.*high|high.*argon/i,                           alias: "gemini-4-argon-high" },
@@ -138,7 +159,7 @@ const MODEL_PATTERNS = {
 // keystroke. Without this guard the broad `flash` pattern in MODEL_PATTERNS hijacks them onto the
 // flash-agent slot. Verified via MITM dump capture of streamGenerateContent (see AI_JOURNAL).
 const MODEL_NO_MAP = {
-  antigravity: [/^tab[_-]/i, /argon/i],
+  antigravity: [/^tab[_-]/i, /lite/i, /minimal/i, /flash.*low|low.*flash/i],
 };
 
 // URL substrings whose request/response should NOT be dumped to file (telemetry, polling, empty)
@@ -187,6 +208,11 @@ function extractModel(url, body) {
     }
     const model = urlModel || parsed.model || null;
     const cleanModelName = String(model).replace(/^models\//, "");
+    const rawThinkingLevel = parsed.request?.generationConfig?.thinkingConfig?.thinkingLevel
+      || parsed.generationConfig?.thinkingConfig?.thinkingLevel;
+    if (String(rawThinkingLevel || "").toLowerCase() === "minimal") {
+      return `${cleanModelName}-minimal`;
+    }
     if (cleanModelName === "gemini-3.6-flash-tiered" || cleanModelName === "gemini-3.7-flash-tiered" || cleanModelName === "gemini-3.8-flash-tiered") {
       const ver = cleanModelName.includes("3.8") ? "3.8" : cleanModelName.includes("3.7") ? "3.7" : "3.6";
       const rawLevel = parsed.request?.generationConfig?.thinkingConfig?.thinkingLevel

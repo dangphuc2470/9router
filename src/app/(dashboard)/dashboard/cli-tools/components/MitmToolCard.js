@@ -36,13 +36,47 @@ export default function MitmToolCard({
   const [modelMappings, setModelMappings] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
   const [currentEditingAlias, setCurrentEditingAlias] = useState(null);
+  const [ag255Running, setAg255Running] = useState(false);
+  const [ag255Loading, setAg255Loading] = useState(false);
 
   const mitmHosts = TOOL_HOSTS[tool.id] ?? [];
   const canRunWithoutPassword = isWin || hasCachedPassword || needsSudoPassword === false;
 
   useEffect(() => {
-    if (isExpanded) loadSavedMappings();
-  }, [isExpanded]);
+    if (isExpanded) {
+      loadSavedMappings();
+      if (tool.id === "antigravity") loadAg255Status();
+    }
+  }, [isExpanded, tool.id]);
+
+  const loadAg255Status = async () => {
+    try {
+      const res = await fetch("/api/cli-tools/antigravity-mitm/ag255");
+      if (res.ok) {
+        const data = await res.json();
+        setAg255Running(!!data.running);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleAg255Toggle = async () => {
+    setAg255Loading(true);
+    setWarning(null);
+    try {
+      const res = await fetch("/api/cli-tools/antigravity-mitm/ag255", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: ag255Running ? "stop" : "start" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to toggle IDE 2.5.5 Proxy");
+      setAg255Running(!!data.running);
+    } catch (err) {
+      setWarning(err.message);
+    } finally {
+      setAg255Loading(false);
+    }
+  };
 
   const loadSavedMappings = async () => {
     try {
@@ -237,27 +271,51 @@ export default function MitmToolCard({
               <p className="text-xs text-text-muted px-1">Model mappings will be available soon.</p>
             )}
 
-            {/* Start / Stop DNS button */}
+            {/* Start / Stop DNS & IDE 2.5.5 Proxy buttons */}
             <div className="flex flex-col gap-2 sm:items-start">
-              {dnsActive ? (
-                <button
-                  onClick={handleDnsToggle}
-                  disabled={!serverRunning || loading}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
-                >
-                  <span className="material-symbols-outlined text-[16px]">stop_circle</span>
-                  Stop DNS
-                </button>
-              ) : (
-                <button
-                  onClick={handleDnsToggle}
-                  disabled={!serverRunning || loading}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
-                >
-                  <span className="material-symbols-outlined text-[16px]">play_circle</span>
-                  Start DNS
-                </button>
-              )}
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                {dnsActive ? (
+                  <button
+                    onClick={handleDnsToggle}
+                    disabled={!serverRunning || loading}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">stop_circle</span>
+                    Stop DNS
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDnsToggle}
+                    disabled={!serverRunning || loading}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_circle</span>
+                    Start DNS
+                  </button>
+                )}
+
+                {tool.id === "antigravity" && (
+                  ag255Running ? (
+                    <button
+                      onClick={handleAg255Toggle}
+                      disabled={ag255Loading}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">stop_circle</span>
+                      Stop IDE 2.5.5 Proxy (:20443)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleAg255Toggle}
+                      disabled={ag255Loading}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-500 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">play_circle</span>
+                      Start IDE 2.5.5 Proxy (:20443)
+                    </button>
+                  )
+                )}
+              </div>
 
               {/* Warning below button */}
               {warning && (
