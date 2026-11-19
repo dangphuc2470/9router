@@ -18,7 +18,7 @@ const cliMitmDir = path.join(cliAppDir, "src", "mitm");
 // it can be copied to DATA_DIR/runtime/ and spawned from there (escapes
 // node_modules file locks that block `npm i -g 9router@latest` on Windows).
 const EXTERNALS = [];
-const ENTRIES = ["server.js"];
+const ENTRIES = ["server.js", "ag255Proxy.js"];
 
 async function buildEntry(entry) {
   const mitmSrc = path.join(appDir, "src", "mitm");
