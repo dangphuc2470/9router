@@ -73,6 +73,25 @@ function forwardUpstream(req, res, bodyBuffer, transformResponse) {
       timeout: 30000,
     }, (upRes) => {
       if (!transformResponse) {
+        if (upRes.statusCode >= 400) {
+          const errChunks = [];
+          upRes.on("data", (c) => errChunks.push(c));
+          upRes.on("end", () => {
+            let errBody = Buffer.concat(errChunks);
+            const enc = String(upRes.headers["content-encoding"] || "").toLowerCase();
+            let decoded = errBody;
+            try {
+              if (enc.includes("gzip")) decoded = zlib.gunzipSync(errBody);
+              else if (enc.includes("br")) decoded = zlib.brotliDecompressSync(errBody);
+              else if (enc.includes("deflate")) decoded = zlib.inflateSync(errBody);
+            } catch {}
+            err(`[ag255] UPSTREAM ${upRes.statusCode} ${req.method} ${req.url}: ${decoded.toString("utf8").slice(0, 600)}`);
+            if (!res.headersSent) res.writeHead(upRes.statusCode, upRes.headers);
+            if (!res.writableEnded) res.end(errBody);
+            resolve();
+          });
+          return;
+        }
         res.writeHead(upRes.statusCode, upRes.headers);
         upRes.pipe(res);
         upRes.on("end", resolve);
@@ -134,6 +153,7 @@ const server = http.createServer(async (req, res) => {
     if (isChatRequest("antigravity", req)) {
       const model = extractModel(req.url || "", bodyBuffer);
       if (model && (MODEL_NO_MAP.antigravity || []).some((re) => re.test(model))) {
+        log(`[ag255] chat model=${model} -> passthrough (no-map)`);
         return await forwardUpstream(req, res, bodyBuffer);
       }
       const mapped = getMappedModel(model);
@@ -141,6 +161,7 @@ const server = http.createServer(async (req, res) => {
         log(`[ag255] ${model} -> ${mapped}`);
         return await antigravityHandler.intercept(req, res, bodyBuffer, mapped, (r, s, b) => forwardUpstream(r, s, b));
       }
+      log(`[ag255] chat model=${model || "(unknown)"} -> passthrough (unmapped)`);
     }
 
     return await forwardUpstream(req, res, bodyBuffer);

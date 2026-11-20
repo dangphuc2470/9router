@@ -205,6 +205,9 @@ export default function ProviderLimits() {
   const [expiringFirst, setExpiringFirst] = useState(false);
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNoteId, setSavingNoteId] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONNECTIONS_PAGE_SIZE);
   const [customPageSizeInput, setCustomPageSizeInput] = useState(
@@ -613,6 +616,34 @@ export default function ProviderLimits() {
       })
       .catch(() => {});
   }, []);
+
+  const handleSaveNote = useCallback(async (connectionId) => {
+    const trimmed = noteDraft.trim();
+    setSavingNoteId(connectionId);
+    try {
+      const res = await fetch(`/api/providers/${connectionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerSpecificData: { note: trimmed },
+        }),
+      });
+      if (res.ok) {
+        setConnections((prev) =>
+          prev.map((c) =>
+            c.id === connectionId
+              ? { ...c, providerSpecificData: { ...(c.providerSpecificData || {}), note: trimmed } }
+              : c
+          )
+        );
+        setEditingNoteId(null);
+      }
+    } catch (error) {
+      console.error("Failed to save note:", error);
+    } finally {
+      setSavingNoteId(null);
+    }
+  }, [noteDraft]);
 
   const handleSaveAutoPing = useCallback(async (connectionId, provider, { reactive, schedule }) => {
     const settingsKey = AUTO_PING_SETTINGS_KEYS[provider];
@@ -1167,6 +1198,56 @@ export default function ProviderLimits() {
                           {getConnectionSecondaryLabel(conn)}
                         </p>
                       ) : null}
+                      {editingNoteId === conn.id ? (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={noteDraft}
+                            onChange={(e) => setNoteDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveNote(conn.id);
+                              } else if (e.key === "Escape") {
+                                setEditingNoteId(null);
+                              }
+                            }}
+                            placeholder="Nhập ghi chú cho acc..."
+                            autoFocus
+                            disabled={savingNoteId === conn.id}
+                            className="h-6 min-w-0 flex-1 rounded border border-primary/40 bg-surface px-2 text-[11px] text-text-primary outline-none focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveNote(conn.id)}
+                            disabled={savingNoteId === conn.id}
+                            className="h-6 rounded bg-primary px-2 text-[10px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            {savingNoteId === conn.id ? "..." : "Lưu"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingNoteId(null)}
+                            disabled={savingNoteId === conn.id}
+                            className="h-6 rounded border border-black/10 px-1.5 text-[10px] text-text-muted hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      ) : conn.providerSpecificData?.note ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingNoteId(conn.id);
+                            setNoteDraft(conn.providerSpecificData?.note || "");
+                          }}
+                          className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                          title="Bấm để sửa ghi chú"
+                        >
+                          <span className="material-symbols-outlined text-[12px] shrink-0">sticky_note_2</span>
+                          <span className="truncate">{conn.providerSpecificData.note}</span>
+                        </button>
+                      ) : null}
                       {conn.throttledUntil && new Date(conn.throttledUntil).getTime() > Date.now() && (
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           <span
@@ -1323,6 +1404,28 @@ export default function ProviderLimits() {
                         </Tooltip>
                       );
                     })()}
+                    <Tooltip text={conn.providerSpecificData?.note ? "Sửa ghi chú" : "Thêm ghi chú"}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingNoteId === conn.id) {
+                            setEditingNoteId(null);
+                          } else {
+                            setEditingNoteId(conn.id);
+                            setNoteDraft(conn.providerSpecificData?.note || "");
+                          }
+                        }}
+                        disabled={rowBusy}
+                        aria-label="Account note"
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 ${
+                          conn.providerSpecificData?.note ? "text-amber-500" : "text-text-muted hover:text-primary"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          sticky_note_2
+                        </span>
+                      </button>
+                    </Tooltip>
                     <Tooltip text="Refresh quota">
                       <button
                         type="button"

@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 import { cleanupProviderConnections, getSettings, updateSettings, getApiKeys } from "@/lib/localDb";
+import { spawn } from "child_process";
 import {
   enableTunnel, enableTailscale,
   isTunnelManuallyDisabled, isTunnelReconnecting, isTailscaleReconnecting,
@@ -45,6 +46,7 @@ const g = global.__appSingleton ??= {
   lastWatchdogTick: Date.now(),
   lastOnline: null,
   mitmStartInProgress: false,
+  geminiWeb2ApiStartInProgress: false,
   tunnelAutoResumed: false,
   tailscaleAutoResumed: false,
 };
@@ -83,6 +85,12 @@ async function runHeavyStartup() {
   await cleanupProviderConnections();
   const settings = await getSettings();
 
+  if (settings.geminiWeb2ApiAutoStart !== false) {
+    autoStartGeminiWeb2Api(settings).catch((e) =>
+      console.log("[InitApp] Gemini Web2API auto-start failed:", e.message)
+    );
+  }
+
   // Auto-resume tunnel (once per process)
   if (settings.tunnelEnabled && !g.tunnelAutoResumed) {
     g.tunnelAutoResumed = true;
@@ -105,6 +113,11 @@ async function runHeavyStartup() {
     autoStartMitm(settings);
   }
 
+  syncMitmAliasCache().catch(() => {});
+  import("@/lib/ag255Manager")
+    .then(({ autoStartAg255Proxy }) => autoStartAg255Proxy())
+    .catch((e) => console.log("[InitApp] ag255Proxy auto-start failed:", e.message));
+
   configureTunnelMonitoring(settings);
 
   if (hasQuotaAutoPingEnabled(settings)) {
@@ -118,6 +131,81 @@ async function runHeavyStartup() {
   import("@/sse/services/backgroundTokenRefresh.js")
     .then(({ startBackgroundTokenRefresh }) => startBackgroundTokenRefresh())
     .catch((e) => console.log("[BackgroundTokenRefresh] scheduler start failed:", e.message));
+}
+
+function resolveGeminiWeb2ApiPaths() {
+  if (process.env.GEMINI_WEB2API_SCRIPT) {
+    return {
+      script: process.env.GEMINI_WEB2API_SCRIPT,
+      config: process.env.GEMINI_WEB2API_CONFIG || null,
+    };
+  }
+  const candidates = [
+    join(process.cwd(), "..", "gemini-web2api", "gemini_web2api.py"),
+    join(process.cwd(), "gemini-web2api", "gemini_web2api.py"),
+  ];
+  for (const script of candidates) {
+    if (!existsSync(script)) continue;
+    const dir = dirname(script);
+    const config = join(dir, "config.json");
+    return {
+      script,
+      config: existsSync(config) ? config : null,
+    };
+  }
+  return { script: null, config: null };
+}
+
+async function geminiWeb2ApiIsHealthy(baseUrl, apiKey) {
+  try {
+    const url = new URL(String(baseUrl || "http://127.0.0.1:8081/v1").replace(/\/$/, "") + "/models");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const res = await fetch(url, { headers, signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function autoStartGeminiWeb2Api(settings) {
+  if (g.geminiWeb2ApiStartInProgress) return;
+  g.geminiWeb2ApiStartInProgress = true;
+  try {
+    const baseUrl = String(settings.geminiWeb2ApiFallbackBaseUrl || "http://127.0.0.1:8081/v1");
+    if (await geminiWeb2ApiIsHealthy(baseUrl, settings.geminiWeb2ApiFallbackApiKey)) {
+      console.log("[InitApp] Gemini Web2API already running");
+      return;
+    }
+    const { script, config } = resolveGeminiWeb2ApiPaths();
+    if (!script || !existsSync(script)) {
+      console.log("[InitApp] Gemini Web2API script not found; auto-start skipped");
+      return;
+    }
+    const url = new URL(baseUrl);
+    const port = url.port || "8081";
+    const args = [script, "--port", port];
+    if (config) args.push("--config", config);
+    const child = spawn("python3", args, {
+      cwd: dirname(script),
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env },
+    });
+    child.unref();
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (await geminiWeb2ApiIsHealthy(baseUrl, settings.geminiWeb2ApiFallbackApiKey)) {
+        console.log("[InitApp] Gemini Web2API auto-started");
+        return;
+      }
+    }
+    console.log("[InitApp] Gemini Web2API did not become healthy");
+  } finally {
+    g.geminiWeb2ApiStartInProgress = false;
+  }
 }
 
 // Cheap local check: keeps the scheduler module (and its provider graph) unloaded

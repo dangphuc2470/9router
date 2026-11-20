@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
+const { spawn } = require("child_process");
 
 const origCreate = http.createServer.bind(http);
 
@@ -15,6 +16,96 @@ const PEER_TOKEN = crypto.randomBytes(24).toString("hex");
 process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
 
 let backgroundRefreshStarted = false;
+
+let geminiWeb2ApiStartAttempted = false;
+
+function resolveGeminiWeb2Api() {
+  if (process.env.GEMINI_WEB2API_SCRIPT) {
+    return {
+      script: process.env.GEMINI_WEB2API_SCRIPT,
+      config: process.env.GEMINI_WEB2API_CONFIG || null,
+      port: process.env.GEMINI_WEB2API_PORT || "8081",
+    };
+  }
+  const candidates = [
+    path.join(process.cwd(), "..", "gemini-web2api", "gemini_web2api.py"),
+    path.join(process.cwd(), "gemini-web2api", "gemini_web2api.py"),
+    path.resolve(process.cwd(), "..", "..", "..", "gemini-web2api", "gemini_web2api.py"),
+  ];
+  for (const script of candidates) {
+    if (!fs.existsSync(script)) continue;
+    const dir = path.dirname(script);
+    const config = path.join(dir, "config.json");
+    let port = "8081";
+    try {
+      if (fs.existsSync(config)) port = String(JSON.parse(fs.readFileSync(config, "utf8")).port || 8081);
+    } catch {}
+    return {
+      script,
+      config: fs.existsSync(config) ? config : null,
+      port,
+    };
+  }
+  return null;
+}
+
+async function geminiWeb2ApiIsHealthy(port, configPath) {
+  let apiKey = "";
+  try {
+    if (configPath && fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      apiKey = Array.isArray(config.api_keys) ? config.api_keys[0] : "";
+    }
+  } catch {}
+  try {
+    const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const res = await fetch(`http://127.0.0.1:${port}/v1/models`, {
+      headers,
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function startGeminiWeb2ApiFromCustomServer() {
+  if (geminiWeb2ApiStartAttempted) return;
+  geminiWeb2ApiStartAttempted = true;
+  if (process.env.GEMINI_WEB2API_AUTOSTART === "false") return;
+  const resolved = resolveGeminiWeb2Api();
+  if (!resolved || !fs.existsSync(resolved.script)) return;
+  if (await geminiWeb2ApiIsHealthy(resolved.port, resolved.config)) return;
+  const args = [resolved.script, "--port", resolved.port];
+  if (resolved.config) args.push("--config", resolved.config);
+  const child = spawn("python3", args, {
+    cwd: path.dirname(resolved.script),
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (await geminiWeb2ApiIsHealthy(resolved.port, resolved.config)) {
+      console.log(`[GeminiWeb2API] auto-started on port ${resolved.port}`);
+      return;
+    }
+  }
+  console.log("[GeminiWeb2API] auto-start failed or not ready");
+}
+
+setTimeout(() => {
+  startGeminiWeb2ApiFromCustomServer().catch((e) =>
+    console.log("[GeminiWeb2API] auto-start error:", e?.message || e)
+  );
+}, 300);
+
+setInterval(() => {
+  geminiWeb2ApiStartAttempted = false;
+  startGeminiWeb2ApiFromCustomServer().catch((e) =>
+    console.log("[GeminiWeb2API] watchdog error:", e?.message || e)
+  );
+}, 10000).unref();
 
 function startBackgroundTokenRefreshFromCustomServer() {
   if (backgroundRefreshStarted) return;
@@ -277,6 +368,15 @@ http.createServer = (...args) => {
   const server = origCreate(...rest, wrapped);
   server.once("listening", () => {
     startBackgroundTokenRefreshFromCustomServer();
+    const addr = server.address();
+    const listenPort = typeof addr === "object" && addr ? addr.port : Number(process.env.PORT || 20128);
+    setTimeout(() => {
+      fetch(`http://127.0.0.1:${listenPort}/api/cli-tools/antigravity-mitm/ag255`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      }).catch(() => {});
+    }, 800);
   });
   const origEmit = server.emit;
   // JBR 25 sends h2c upgrades that the HTTP/1.1 server would otherwise close.

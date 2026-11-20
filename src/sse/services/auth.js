@@ -18,6 +18,15 @@ function githubMonthlyResetMs(status, errorText, provider) {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
 }
 
+function matchesModelPattern(pattern, targetModel) {
+  if (!pattern || !targetModel) return false;
+  const p = String(pattern).trim();
+  const m = String(targetModel).trim();
+  if (p === m) return true;
+  if (p.endsWith("*")) return m.startsWith(p.slice(0, -1));
+  return false;
+}
+
 /**
  * Get provider credentials from localDb
  * Filters out unavailable accounts and returns the selected account based on strategy
@@ -93,6 +102,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       if (isModelLockActive(c, model)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
       if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
+      const disabled = c.providerSpecificData?.disabledModels;
+      const targetModel = model || requestedModel;
+      if (Array.isArray(disabled) && disabled.length && targetModel && disabled.some((p) => matchesModelPattern(p, targetModel))) {
+        log.debug("AUTH", `${c.id?.slice(0, 8)} | DISABLED_MODEL_SKIP ${targetModel}`);
+        return false;
+      }
       // Antigravity: skip if live quota exhausted for this model or its quota family
       if (isAntigravity && model && antigravityQuotaCache) {
         const cachedQuotas = antigravityQuotaCache.get(c.id);
