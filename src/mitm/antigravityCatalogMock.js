@@ -2178,6 +2178,58 @@ const MOCK_CATALOG = {
         "audio/l16": true
       },
       "thinkingLevel": 100
+    },
+    "claude-sonnet-4-6": {
+      "displayName": "Claude Sonnet 4.6 (Thinking)",
+      "supportsImages": true,
+      "supportsThinking": true,
+      "thinkingBudget": 1024,
+      "recommended": true,
+      "maxTokens": 250000,
+      "maxOutputTokens": 64000,
+      "quotaInfo": {
+        "remainingFraction": 1,
+        "resetTime": "2026-11-25T14:42:04Z"
+      },
+      "model": "MODEL_PLACEHOLDER_M35",
+      "apiProvider": "API_PROVIDER_ANTHROPIC_VERTEX",
+      "modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+      "supportedMimeTypes": {
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true,
+        "image/heic": true,
+        "image/heif": true,
+        "image/jpeg": true
+      },
+      "vertexModelId": "claude-sonnet-4-6@default"
+    },
+    "claude-opus-4-6-thinking": {
+      "displayName": "Claude Opus 4.6 (Thinking)",
+      "supportsImages": true,
+      "supportsThinking": true,
+      "thinkingBudget": 1024,
+      "recommended": true,
+      "maxTokens": 250000,
+      "maxOutputTokens": 64000,
+      "quotaInfo": {
+        "remainingFraction": 1,
+        "resetTime": "2026-11-25T14:42:04Z"
+      },
+      "model": "MODEL_PLACEHOLDER_M26",
+      "apiProvider": "API_PROVIDER_ANTHROPIC_VERTEX",
+      "modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+      "supportedMimeTypes": {
+        "image/jpeg": true,
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true,
+        "image/heic": true,
+        "image/heif": true
+      },
+      "vertexModelId": "claude-opus-4-6@default"
     }
   },
   "agentModelSorts": [
@@ -2197,6 +2249,7 @@ const MOCK_CATALOG = {
             "gemini-4-hydrogen-xhigh",
             "gemini-4-hydrogen-medium",
             "gemini-4-hydrogen-low",
+            "gemini-4-hydrogen-sonar",
             "gemini-3.8-flash-high",
             "gemini-3.8-flash-medium",
             "gemini-3.8-flash-low",
@@ -2206,6 +2259,8 @@ const MOCK_CATALOG = {
             "claude-sonnet-5-5-low",
             "claude-sonnet-5-5-medium",
             "claude-sonnet-5-5-high",
+            "claude-opus-4-6-thinking",
+            "claude-sonnet-4-6",
             "gpt-oss-120b-medium"
           ]
         }
